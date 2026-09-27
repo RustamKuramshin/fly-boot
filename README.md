@@ -2,7 +2,12 @@
 
 A Spring Boot-style web framework in which HTTP request routing is done by a simulated brain of the fruit fly *Drosophila melanogaster*, built from the real connectome: 138,639 neurons and 15 million connections.
 
-Status: phase 0, the feasibility check, phase 1, the brain module, and phase 2, route learning, are done.
+Status - phases done:
+
+0. Feasibility check.
+1. Brain module.
+2. Route learning.
+3. Annotations, server and dispatcher.
 
 - Research
 - Architecture and plan
@@ -12,6 +17,8 @@ Status: phase 0, the feasibility check, phase 1, the brain module, and phase 2, 
 | Module | What is inside |
 |---|---|
 | `flyboot-brain` | Connectome, LIF engine (a port of the Shiu et al. 2024 model, validated against Brian2), population atlas, HTTP "nose", fly pool, route learning (`FlyRouter`) |
+| `flyboot-core` | `@Component`, package scanning, constructor injection |
+| `flyboot-web` | Spring-style annotations (`@RestController`, `@GetMapping`, `@PathVariable`...), HTTP server, a dispatcher where the fly picks the route |
 | `flyboot-connectome-tool` | Converts FlyWire v783 to `.flyb` with DuckDB |
 | `flyboot-lab` | Experiments and a JMH benchmark (`mvn -q -pl flyboot-lab exec:exec`) |
 | `tools/reference` | Reference run of the original model on Brian2 and the comparison |
