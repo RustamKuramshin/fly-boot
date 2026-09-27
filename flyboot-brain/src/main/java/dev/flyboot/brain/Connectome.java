@@ -105,6 +105,22 @@ public final class Connectome {
         return new Connectome(name + "-shuffled", rootIds, rowPtr, shuffled, weight);
     }
 
+    /**
+     * Copy with the outgoing synapse counts of the given neurons multiplied by {@code factor}, rounded and clamped
+     * to the short range. Used to strengthen a neuron the LIF model under-represents, e.g. the graded,
+     * non-spiking APL.
+     */
+    public Connectome withScaledOutputs(int[] neurons, double factor) {
+        short[] scaled = weight.clone();
+        for (int pre : neurons) {
+            for (int e = rowPtr[pre]; e < rowPtr[pre + 1]; e++) {
+                long w = Math.round(weight[e] * factor);
+                scaled[e] = (short) Math.clamp(w, Short.MIN_VALUE, Short.MAX_VALUE);
+            }
+        }
+        return new Connectome(name + "-x" + factor, rootIds, rowPtr, post, scaled);
+    }
+
     public void write(Path file) throws IOException {
         int n = rootIds.length;
         int m = post.length;

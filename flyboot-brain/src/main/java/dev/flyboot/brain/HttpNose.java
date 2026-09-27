@@ -14,10 +14,13 @@ import java.util.regex.Pattern;
  *       (GET - DA1, POST - VA1v, PUT - VA1d, DELETE - DL3, PATCH - DC3).</li>
  *   <li>Every path feature is hashed onto {@code glomeruliPerFeature} of the remaining glomeruli, each adding
  *       {@code featureHz} up to {@code maxHz}. Features: the segment count, and for every segment its position
- *       together with its literal text and with its shape (number, uuid, word, other).</li>
+ *       together with its shape (number, uuid, word, other) and its literal text.</li>
  * </ul>
- * Like a receptor tuned to a chemical class, the nose senses that a segment is a number, but it never knows
- * which endpoints exist: telling them apart is the brain's job. The query string does not smell.
+ * Like a receptor tuned to a chemical class, the nose senses that a segment is a number, but by default it does
+ * not tell one number (or uuid) from another: such literals are values, and smelling them only adds noise that the
+ * Kenyon cells amplify (phase 2). The price: endpoints that differ only by a numeric literal, like
+ * {@code /errors/404} and {@code /errors/500}, smell the same. The nose never knows which endpoints exist:
+ * telling them apart is the brain's job. The query string does not smell.
  */
 public final class HttpNose {
 
@@ -34,14 +37,21 @@ public final class HttpNose {
     private final double featureHz;
     private final double maxHz;
     private final int glomeruliPerFeature;
+    private final boolean methodAsFeature;
+    private final boolean valueLiterals;
 
     /**
      * @param atlas               sensory channels of the brain
      * @param featureHz           rate added to a glomerulus by one feature
      * @param maxHz               rate cap per glomerulus; also the rate of a method glomerulus
      * @param glomeruliPerFeature how many distinct glomeruli one feature drives
+     * @param methodAsFeature     whether a standard method is also smelled as a feature on ordinary glomeruli;
+     *                            pheromone glomeruli mostly feed the innate lateral horn pathway, so on their own
+     *                            they tell the mushroom body little
+     * @param valueLiterals       whether the literal text of number and uuid segments is smelled too
      */
-    public HttpNose(BrainAtlas atlas, double featureHz, double maxHz, int glomeruliPerFeature) {
+    public HttpNose(BrainAtlas atlas, double featureHz, double maxHz, int glomeruliPerFeature, boolean methodAsFeature,
+                    boolean valueLiterals) {
         Map<String, String> methods = new HashMap<>();
         METHOD_GLOMERULI.forEach((method, glom) -> {
             if (atlas.glomeruli().containsKey(glom)) {
@@ -56,11 +66,22 @@ public final class HttpNose {
         this.featureHz = featureHz;
         this.maxHz = maxHz;
         this.glomeruliPerFeature = glomeruliPerFeature;
+        this.methodAsFeature = methodAsFeature;
+        this.valueLiterals = valueLiterals;
     }
 
-    /** Defaults chosen in phase 0: 30 Hz per feature, at most 60 Hz per glomerulus, 2 glomeruli per feature. */
+    /**
+     * Defaults chosen in phases 0 and 2: 30 Hz per feature, at most 60 Hz per glomerulus, 2 glomeruli per feature,
+     * method only on its pheromone glomerulus, number and uuid values not smelled.
+     */
     public HttpNose(BrainAtlas atlas) {
-        this(atlas, 30, 60, 2);
+        this(atlas, 30, 60, 2, false, false);
+    }
+
+    @Override
+    public String toString() {
+        return "HttpNose[featureHz=" + featureHz + ", maxHz=" + maxHz + ", glomeruliPerFeature=" + glomeruliPerFeature
+                + ", methodAsFeature=" + methodAsFeature + ", valueLiterals=" + valueLiterals + "]";
     }
 
     public Odor smell(String method, String path) {
@@ -70,15 +91,19 @@ public final class HttpNose {
         List<String> features = new ArrayList<>();
         if (methodGlom != null) {
             rates.put(methodGlom, maxHz);
-        } else {
+        }
+        if (methodGlom == null || methodAsFeature) {
             features.add("method:" + m);
         }
         List<String> segments = segments(path);
         features.add("len:" + segments.size());
         for (int i = 0; i < segments.size(); i++) {
             String segment = segments.get(i);
-            features.add(i + ":shape:" + shape(segment));
-            features.add(i + ":lit:" + segment);
+            String shape = shape(segment);
+            features.add(i + ":shape:" + shape);
+            if (valueLiterals || !(shape.equals("NUM") || shape.equals("UUID"))) {
+                features.add(i + ":lit:" + segment);
+            }
         }
         for (String feature : features) {
             for (String glom : glomeruliOf(feature)) {

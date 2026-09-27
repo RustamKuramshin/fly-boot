@@ -2,7 +2,7 @@
 
 A Spring Boot-style web framework in which HTTP request routing is done by a simulated brain of the fruit fly *Drosophila melanogaster*, built from the real connectome: 138,639 neurons and 15 million connections.
 
-Status: phase 0, the feasibility check, and phase 1, the brain module, are done.
+Status: phase 0, the feasibility check, phase 1, the brain module, and phase 2, route learning, are done.
 
 - Research
 - Architecture and plan
@@ -11,7 +11,7 @@ Status: phase 0, the feasibility check, and phase 1, the brain module, are done.
 
 | Module | What is inside |
 |---|---|
-| `flyboot-brain` | Connectome, LIF engine (a port of the Shiu et al. 2024 model, validated against Brian2), population atlas, HTTP "nose", fly pool |
+| `flyboot-brain` | Connectome, LIF engine (a port of the Shiu et al. 2024 model, validated against Brian2), population atlas, HTTP "nose", fly pool, route learning (`FlyRouter`) |
 | `flyboot-connectome-tool` | Converts FlyWire v783 to `.flyb` with DuckDB |
 | `flyboot-lab` | Experiments and a JMH benchmark (`mvn -q -pl flyboot-lab exec:exec`) |
 | `tools/reference` | Reference run of the original model on Brian2 and the comparison |
@@ -24,7 +24,7 @@ You need JDK 25 (`.java-version` for jenv) and Maven.
 ./scripts/download-data.sh
 mvn install
 mvn -q -pl flyboot-connectome-tool exec:java
-java -cp flyboot-brain/target/classes:flyboot-lab/target/classes dev.flyboot.lab.RouteSeparability 75 20
+java -cp flyboot-brain/target/classes:flyboot-lab/target/classes dev.flyboot.lab.RouterDemo
 ```
 
 ## Data and attribution

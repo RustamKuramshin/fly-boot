@@ -77,12 +77,31 @@ class HttpNoseTest {
     }
 
     @Test
-    void differentValuesOfTheSameTemplateShareTheShape() {
-        Odor a = nose.smell("GET", "/pets/1");
-        Odor b = nose.smell("GET", "/pets/987654");
-        for (String glom : nose.glomeruliOf("1:shape:NUM")) {
-            assertTrue(a.rateHz(glom) > 0 && b.rateHz(glom) > 0, glom);
+    void numbersAndUuidsSmellAlikeButWordsDoNot() {
+        assertEquals(nose.smell("GET", "/pets/1"), nose.smell("GET", "/pets/987654"));
+        assertEquals(nose.smell("GET", "/visits/3f2b8c1e-9d4a-4f6b-8e2c-1a2b3c4d5e6f"),
+                nose.smell("GET", "/visits/00000000-0000-0000-0000-000000000000"));
+        for (String glom : nose.glomeruliOf("1:lit:alice")) {
+            assertTrue(nose.smell("GET", "/vets/alice").rateHz(glom) > 0, "word literal smells: " + glom);
         }
-        assertNotEquals(a, b);
+        for (String glom : nose.glomeruliOf("1:shape:NUM")) {
+            assertTrue(nose.smell("GET", "/pets/1").rateHz(glom) > 0, glom);
+        }
+    }
+
+    @Test
+    void valueLiteralsCanBeSmelledOnRequest() {
+        HttpNose keen = new HttpNose(SyntheticBrain.create(200, 1).atlas(), 30, 60, 2, false, true);
+        assertNotEquals(keen.smell("GET", "/pets/1"), keen.smell("GET", "/pets/987654"));
+    }
+
+    @Test
+    void methodCanAlsoBeSmelledAsAFeature() {
+        HttpNose both = new HttpNose(SyntheticBrain.create(200, 1).atlas(), 30, 60, 2, true, false);
+        Odor get = both.smell("GET", "/pets");
+        assertEquals(60, get.rateHz("ORN_DA1"));
+        for (String glom : both.glomeruliOf("method:GET")) {
+            assertTrue(get.rateHz(glom) > 0, glom);
+        }
     }
 }

@@ -67,6 +67,14 @@ public final class Brain {
         return new Brain(connectome.shuffledTargets(seed), catalog, params);
     }
 
+    /** Brain whose APL outputs are {@code factor} times stronger, see {@link Connectome#withScaledOutputs}. */
+    public Brain withAplGain(double factor) {
+        if (factor == 1) {
+            return this;
+        }
+        return new Brain(connectome.withScaledOutputs(atlas.population(BrainAtlas.APL), factor), catalog, params);
+    }
+
     public BrainPool pool(int flies, double sniffMs, List<String> readouts) {
         return new BrainPool(this, flies, sniffMs, readouts);
     }
