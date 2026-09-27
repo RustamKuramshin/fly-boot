@@ -26,13 +26,21 @@ import java.util.Locale;
  * serves HTTP until the JVM stops. Properties, with defaults:
  * <ul>
  *   <li>{@code server.port=8080}, {@code server.host=0.0.0.0}</li>
- *   <li>{@code flyboot.brain.data-dir=data} - where {@code flywire-783.flyb} lives</li>
+ *   <li>{@code flyboot.brain.data-dir=data} - where converted brains live</li>
+ *   <li>{@code flyboot.brain.name=flywire-783} - which brain: {@code flywire-783} (female brain, FlyWire) or
+ *       {@code malecns-v1} (male brain and nerve cord, MaleCNS); any {@code <name>.flyb} in the data directory</li>
+ *   <li>{@code flyboot.brain.w-syn} - weight of one synapse in mV; default from {@code <name>.brain.properties}</li>
+ *   <li>{@code flyboot.brain.engine=cpu} - {@code tornado} simulates on the GPU; needs flyboot-tornado on the
+ *       classpath and the TornadoVM launcher ({@code scripts/run-demo.sh --tornado})</li>
  *   <li>{@code flyboot.brain.control=none} - {@code shuffled} rewires the brain randomly, to see what the wiring is worth</li>
  *   <li>{@code flyboot.brain.cache-dir=.flyboot}, {@code none} disables the synapse cache</li>
  *   <li>{@code flyboot.router.sniff-ms=75}, {@code flyboot.router.flies=0} (one per processor),
- *       {@code flyboot.router.min-belief=0.3}, {@code flyboot.router.apl-gain=3}</li>
+ *       {@code flyboot.router.min-belief=0.3}, {@code flyboot.router.apl-gain} (default from the brain: 3 for
+ *       FlyWire, 1.6 for MaleCNS)</li>
  *   <li>{@code flyboot.learning.samples-per-route=60}, {@code flyboot.learning.decoys-per-route=30},
  *       {@code flyboot.learning.holdout-per-route=10}</li>
+ *   <li>{@code flyboot.learning.online.enabled=false}, {@code flyboot.learning.online.rate=0.5} - keep learning from
+ *       responses: 2xx rewards the chosen route, 5xx and 405 punish it</li>
  *   <li>{@code flyboot.actuator.enabled=true} - {@code /actuator/health}, {@code /actuator/brain}, {@code /actuator/routes}</li>
  *   <li>{@code flyboot.banner.enabled=true}</li>
  * </ul>
@@ -65,11 +73,16 @@ public final class FlyApplication {
         FlyWebApplication.Builder builder = FlyWebApplication.builder()
                 .scanPackages(packages)
                 .brain(brain)
-                .routerOptions(routerOptions(props))
+                .routerOptions(routerOptions(props, brain))
                 .cacheDir(cacheDir(props))
                 .host(props.get("server.host", "0.0.0.0"))
                 .port(props.getInt("server.port", 8080))
+                .onlineLearning(props.getBoolean("flyboot.learning.online.enabled", false),
+                        props.getDouble("flyboot.learning.online.rate", 0.5))
                 .log(message -> LOG.log(System.Logger.Level.INFO, message));
+        dev.flyboot.brain.SimulationEngine engine = dev.flyboot.brain.SimulationEngine.byName(
+                props.get("flyboot.brain.engine", dev.flyboot.brain.SimulationEngine.CPU));
+        LOG.log(System.Logger.Level.INFO, "Simulation engine: " + engine.name() + " (" + engine.device() + ")");
         if (props.getBoolean("flyboot.actuator.enabled", true)) {
             builder.component(BrainActuator.class);
         }
@@ -89,13 +102,25 @@ public final class FlyApplication {
 
     static Brain loadBrain(FlyProperties props) {
         Path dataDir = props.getPath("flyboot.brain.data-dir", "data");
+        String name = props.get("flyboot.brain.name", Brain.DEFAULT_NAME);
         long t = System.nanoTime();
         Brain brain;
         try {
-            brain = Brain.load(dataDir);
+            brain = Brain.load(dataDir, name);
         } catch (IOException e) {
-            throw new UncheckedIOException("Cannot load the brain from " + dataDir.toAbsolutePath()
-                    + ". Run scripts/download-data.sh and ConvertFlyWire, or set flyboot.brain.data-dir", e);
+            List<String> available;
+            try {
+                available = Brain.available(dataDir);
+            } catch (IOException ignored) {
+                available = List.of();
+            }
+            throw new UncheckedIOException("Cannot load brain '" + name + "' from " + dataDir.toAbsolutePath()
+                    + (available.isEmpty() ? ". Run scripts/download-data.sh and the converters (see README)"
+                    : ". Available: " + available + " (flyboot.brain.name)"), e);
+        }
+        String wSyn = props.get("flyboot.brain.w-syn", null);
+        if (wSyn != null) {
+            brain = brain.withParams(brain.params().withWSyn(props.getDouble("flyboot.brain.w-syn", 0)));
         }
         String control = props.get("flyboot.brain.control", "none");
         switch (control) {
@@ -118,8 +143,8 @@ public final class FlyApplication {
         return dir.equalsIgnoreCase("none") ? null : Path.of(dir);
     }
 
-    static FlyRouter.Options routerOptions(FlyProperties props) {
-        FlyRouter.Options d = FlyRouter.Options.defaults();
+    static FlyRouter.Options routerOptions(FlyProperties props, Brain brain) {
+        FlyRouter.Options d = FlyRouter.Options.defaultsFor(brain);
         return new FlyRouter.Options(
                 props.getDouble("flyboot.router.sniff-ms", d.sniffMs()),
                 props.getDouble("flyboot.router.apl-gain", d.aplGain()),
@@ -131,7 +156,8 @@ public final class FlyApplication {
                 props.getInt("flyboot.learning.epochs", d.epochs()),
                 props.getDouble("flyboot.learning.rate", d.learningRate()),
                 props.getDouble("flyboot.router.min-belief", d.minBelief()),
-                props.getInt("flyboot.learning.seed", (int) d.seed()));
+                props.getInt("flyboot.learning.seed", (int) d.seed()),
+                props.get("flyboot.brain.engine", d.engine()));
     }
 
     /** One line per record, unless the application configured java.util.logging itself. */
@@ -144,11 +170,14 @@ public final class FlyApplication {
 
     /** Names of properties, for documentation and tests. */
     static List<String> knownProperties() {
-        return List.of("server.port", "server.host", "flyboot.brain.data-dir", "flyboot.brain.control",
+        return List.of("server.port", "server.host", "flyboot.brain.data-dir", "flyboot.brain.name",
+                "flyboot.brain.engine",
+                "flyboot.brain.w-syn", "flyboot.brain.control",
                 "flyboot.brain.control-seed", "flyboot.brain.cache-dir", "flyboot.router.sniff-ms",
                 "flyboot.router.flies", "flyboot.router.min-belief", "flyboot.router.apl-gain",
                 "flyboot.learning.samples-per-route", "flyboot.learning.decoys-per-route",
                 "flyboot.learning.holdout-per-route", "flyboot.learning.epochs", "flyboot.learning.rate",
-                "flyboot.learning.seed", "flyboot.actuator.enabled", "flyboot.banner.enabled");
+                "flyboot.learning.seed", "flyboot.learning.online.enabled", "flyboot.learning.online.rate",
+                "flyboot.actuator.enabled", "flyboot.banner.enabled");
     }
 }

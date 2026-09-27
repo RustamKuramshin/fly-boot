@@ -76,7 +76,7 @@ public final class LearningStudy {
         double[] gains = args.length > 3 ? Arrays.stream(args[3].split(",")).mapToDouble(Double::parseDouble).toArray()
                 : new double[]{1, 3};
         int decoysPerRoute = args.length > 4 ? Integer.parseInt(args[4]) : 15;
-        Brain brain = Brain.load(Lab.DATA);
+        Brain brain = Lab.brain();
         HttpNose nose = new HttpNose(brain.atlas());
         int flies = Runtime.getRuntime().availableProcessors();
 

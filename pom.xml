@@ -15,6 +15,7 @@
         <module>flyboot-brain</module>
         <module>flyboot-core</module>
         <module>flyboot-web</module>
+        <module>flyboot-tornado</module>
         <module>flyboot-starter</module>
         <module>flyboot-connectome-tool</module>
         <module>flyboot-lab</module>
@@ -28,6 +29,8 @@
         <jmh.version>1.37</jmh.version>
         <classgraph.version>4.8.196</classgraph.version>
         <jackson.version>3.2.3</jackson.version>
+        <arrow.version>19.0.0</arrow.version>
+        <tornado.version>7.0.1-jdk22plus</tornado.version>
     </properties>
 
     <dependencyManagement>
@@ -53,6 +56,16 @@
                 <version>${project.version}</version>
             </dependency>
             <dependency>
+                <groupId>dev.flyboot</groupId>
+                <artifactId>flyboot-tornado</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.beehive-lab</groupId>
+                <artifactId>tornado-api</artifactId>
+                <version>${tornado.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>io.github.classgraph</groupId>
                 <artifactId>classgraph</artifactId>
                 <version>${classgraph.version}</version>
@@ -61,6 +74,21 @@
                 <groupId>tools.jackson.core</groupId>
                 <artifactId>jackson-databind</artifactId>
                 <version>${jackson.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.arrow</groupId>
+                <artifactId>arrow-vector</artifactId>
+                <version>${arrow.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.arrow</groupId>
+                <artifactId>arrow-memory-unsafe</artifactId>
+                <version>${arrow.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.arrow</groupId>
+                <artifactId>arrow-compression</artifactId>
+                <version>${arrow.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.duckdb</groupId>

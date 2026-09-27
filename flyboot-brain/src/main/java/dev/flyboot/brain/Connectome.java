@@ -68,15 +68,18 @@ public final class Connectome {
         return indexByRootId.getOrDefault(rootId, -1);
     }
 
-    int[] rowPtr() {
+    /** CSR row pointers, {@code neuronCount() + 1} entries. Shared, do not modify. */
+    public int[] rowPtr() {
         return rowPtr;
     }
 
-    int[] post() {
+    /** Postsynaptic neuron of every edge. Shared, do not modify. */
+    public int[] post() {
         return post;
     }
 
-    short[] weight() {
+    /** Signed synapse count of every edge. Shared, do not modify. */
+    public short[] weight() {
         return weight;
     }
 

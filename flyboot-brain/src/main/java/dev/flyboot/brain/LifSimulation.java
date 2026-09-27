@@ -23,7 +23,7 @@ import java.util.SplittableRandom;
  * <p>
  * The graph is shared and read-only; an instance holds the mutable state of one fly and is not thread-safe.
  */
-public final class LifSimulation {
+public final class LifSimulation implements FlySimulation {
 
     private static final int STRIDE = 4;
     /** u = v - v_0, the deviation from rest. */
@@ -74,6 +74,10 @@ public final class LifSimulation {
     private long totalSpikes;
     private long neuronUpdates;
     private long synapticEvents;
+    private boolean recordingOn;
+    private int[] recSteps = new int[0];
+    private int[] recNeurons = new int[0];
+    private int recSize;
 
     public LifSimulation(Connectome connectome, LifParams params) {
         this.connectome = connectome;
@@ -140,6 +144,7 @@ public final class LifSimulation {
         totalSpikes = 0;
         neuronUpdates = 0;
         synapticEvents = 0;
+        recSize = 0;
         setStimulus(stimulus);
     }
 
@@ -264,8 +269,34 @@ public final class LifSimulation {
             s[i * STRIDE + G] = 0;
             spikeCount[i]++;
         }
+        if (recordingOn) {
+            record(t, fired, ringSize[slot]);
+        }
         totalSpikes += ringSize[slot];
         step++;
+    }
+
+    private void record(int t, int[] fired, int count) {
+        if (recSize + count > recSteps.length) {
+            int cap = Math.max(1024, Math.max(recSize + count, recSteps.length * 2));
+            recSteps = Arrays.copyOf(recSteps, cap);
+            recNeurons = Arrays.copyOf(recNeurons, cap);
+        }
+        for (int k = 0; k < count; k++) {
+            recSteps[recSize] = t;
+            recNeurons[recSize++] = fired[k];
+        }
+    }
+
+    @Override
+    public void setRecording(boolean on) {
+        recordingOn = on;
+    }
+
+    @Override
+    public SpikeRecording recording() {
+        return recordingOn ? new SpikeRecording(Arrays.copyOf(recSteps, recSize), Arrays.copyOf(recNeurons, recSize),
+                params.dtMs()) : null;
     }
 
     private void addActive(int neuron) {

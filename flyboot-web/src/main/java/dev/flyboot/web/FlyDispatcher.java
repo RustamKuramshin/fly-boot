@@ -39,6 +39,11 @@ public final class FlyDispatcher implements HttpHandler {
 
     private final List<HandlerMethod> handlers;
     private final RouteOracle oracle;
+
+    public RouteOracle oracle() {
+        return oracle;
+    }
+
     private final JsonMapper json;
     private final AtomicLong requests = new AtomicLong();
     private final AtomicLong recognized = new AtomicLong();
@@ -99,6 +104,7 @@ public final class FlyDispatcher implements HttpHandler {
             requests.incrementAndGet();
             RouteOracle.Verdict v = oracle.consult(method, rawPath);
             int status = answer(exchange, method, rawPath, v);
+            v.outcome().accept(status);
             long ms = (System.nanoTime() - started) / 1_000_000;
             trace(new Trace(java.time.Instant.now(), method, rawPath,
                     v.recognized() ? handlers.get(v.route()).template().id() : null, status, v.belief(), v.spikes(),

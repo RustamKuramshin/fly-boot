@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FlyBoot Brain</title>
+<style>
+  :root {
+    --bg: #0b0d12; --panel: #12151d; --line: #232838; --text: #e6e8ee; --muted: #8a92a6; --accent: #fbbf24;
+    --win: #34d399; --lose: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: baseline; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0; font-size: 18px; letter-spacing: .3px; }
+  header .meta { color: var(--muted); font-size: 13px; }
+  form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px 20px; border-bottom: 1px solid var(--line); }
+  select, input, button { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: inherit; }
+  input[name=path] { flex: 1 1 260px; min-width: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  button { cursor: pointer; }
+  button.primary { background: var(--accent); color: #111; border-color: var(--accent); font-weight: 600; }
+  button:disabled { opacity: .5; cursor: default; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 20px 12px; border-bottom: 1px solid var(--line); }
+  .chip { font: 12px ui-monospace, Menlo, monospace; padding: 4px 8px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--muted); }
+  .chip:hover { color: var(--text); border-color: var(--muted); }
+  main { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 16px; padding: 16px 20px 24px; }
+  @media (max-width: 900px) { main { grid-template-columns: minmax(0, 1fr); } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; min-width: 0; }
+  .panel h2 { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+  canvas { display: block; width: 100%; height: auto; border-radius: 8px; background: #06070a; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 8px; font-size: 12px; color: var(--muted); }
+  .legend span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; background: var(--c); vertical-align: -1px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin-bottom: 12px; }
+  .stat { background: #0e1118; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  .stat b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; }
+  .stat small { color: var(--muted); }
+  .verdict { font-size: 15px; margin: 4px 0 12px; min-height: 22px; }
+  .verdict code { font-size: 14px; }
+  .bars { display: grid; gap: 6px; }
+  .bar { display: grid; grid-template-columns: minmax(0, 1fr) 52px; gap: 8px; align-items: center; font: 12px ui-monospace, Menlo, monospace; }
+  .bar .track { position: relative; height: 22px; background: #0e1118; border-radius: 6px; overflow: hidden; }
+  .bar .fill { position: absolute; inset: 0 auto 0 0; width: 0; background: #334155; transition: width .6s ease; }
+  .bar.win .fill { background: var(--win); }
+  .bar.unknown .fill { background: var(--lose); }
+  .bar .label { position: absolute; left: 8px; top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; right: 8px; }
+  .bar .val { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .note { color: var(--muted); font-size: 12px; margin-top: 10px; }
+  .progress { height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; margin-top: 8px; }
+  .progress div { height: 100%; width: 0; background: var(--accent); }
+  .err { color: var(--lose); }
+</style>
+</head>
+<body>
+<header>
+  <h1>FlyBoot · what the fly smells</h1>
+  <div class="meta" id="meta">loading the brain…</div>
+</header>
+<form id="form">
+  <select name="method"><option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option><option>PATCH</option></select>
+  <input name="path" value="/owners/1" autocomplete="off" spellcheck="false" aria-label="request path">
+  <select name="speed" aria-label="slow motion">
+    <option value="20">20× slower</option><option value="50" selected>50× slower</option><option value="150">150× slower</option>
+  </select>
+  <button class="primary" type="submit" id="go">Sniff</button>
+  <button type="button" id="replay" disabled>Replay</button>
+</form>
+<div class="chips" id="chips"></div>
+<main>
+  <section class="panel">
+    <h2>Brain, front view · every dot is a neuron</h2>
+    <canvas id="brain" width="1000" height="600"></canvas>
+    <div class="progress"><div id="bar"></div></div>
+    <div class="legend" id="legend"></div>
+  </section>
+  <section class="panel">
+    <div class="stats">
+      <div class="stat"><b id="clock">0.0</b><small>ms of brain time</small></div>
+      <div class="stat"><b id="count">0</b><small>spikes so far</small></div>
+      <div class="stat"><b id="wall">–</b><small>ms to compute</small></div>
+    </div>
+    <h2>Route neurons</h2>
+    <div class="verdict" id="verdict">Type a request and press Sniff.</div>
+    <div class="bars" id="bars"></div>
+    <h2 style="margin-top:16px">Spikes by population</h2>
+    <canvas id="raster" width="600" height="300"></canvas>
+    <p class="note">The request is turned into an odor (method on a pheromone glomerulus, path features on others), olfactory
+      receptors are driven for the sniff, and activity spreads through the real connectome: receptors → projection neurons →
+      Kenyon cells → … The route neurons read Kenyon cells and projection neurons; the most confident one handles the request.</p>
+  </section>
+</main>
+<script>
+const GROUP_COLORS = { other: "#3b4252", ORN: "#fbbf24", ALPN: "#fb923c", KC: "#a78bfa", LHN: "#34d399", MBON: "#f472b6", DAN: "#60a5fa", APL: "#ef4444", DN: "#22d3ee" };
+const RASTER_GROUPS = ["ORN", "ALPN", "KC", "LHN", "MBON", "DAN", "DN", "other"];
+const $ = (id) => document.getElementById(id);
+const base = location.pathname.replace(/\/ui\/?$/, "");
+let layout, groupNames, background, rankInGroup, groupSizes, run = null;
+
+function colorOf(g) { return GROUP_COLORS[groupNames[g]] || GROUP_COLORS.other; }
+
+async function init() {
+  const [lay, brain, routes] = await Promise.all([
+    fetch(base + "/layout").then(r => r.json()),
+    fetch(base + "?recent=0").then(r => r.json()),
+    fetch(base.replace(/\/brain$/, "") + "/routes").then(r => r.json()).catch(() => [])
+  ]);
+  layout = lay; groupNames = lay.groups;
+  const l = brain.learning || {};
+  $("meta").textContent = `${lay.name} · ${lay.neurons.toLocaleString()} neurons (${lay.known.toLocaleString()} with positions) · ` +
+    `${brain.connectome.connections.toLocaleString()} connections · ${l.endpoints} endpoints learned, ` +
+    `${(100 * l.accuracyOnUnseenValues).toFixed(1)}% accuracy · engine ${l.engine || "cpu"}`;
+  const canvas = $("brain");
+  canvas.width = lay.width; canvas.height = lay.height;
+  background = document.createElement("canvas");
+  background.width = lay.width; background.height = lay.height;
+  const bg = background.getContext("2d");
+  bg.fillStyle = "#06070a"; bg.fillRect(0, 0, lay.width, lay.height);
+  // dim anatomy, then the groups of interest on top
+  for (const pass of [0, 1]) {
+    for (let i = 0; i < lay.neurons; i++) {
+      const g = lay.group[i];
+      if (lay.x[i] < 0 || (pass === 0) !== (g === 0)) continue;
+      bg.globalAlpha = g === 0 ? 0.22 : 0.45;
+      bg.fillStyle = colorOf(g);
+      bg.fillRect(lay.x[i], lay.y[i], g === 0 ? 1 : 1.6, g === 0 ? 1 : 1.6);
+    }
+  }
+  bg.globalAlpha = 1;
+  canvas.getContext("2d").drawImage(background, 0, 0);
+  rankInGroup = new Int32Array(lay.neurons);
+  groupSizes = new Array(groupNames.length).fill(0);
+  for (let i = 0; i < lay.neurons; i++) rankInGroup[i] = groupSizes[lay.group[i]]++;
+  $("legend").innerHTML = groupNames.map((g, k) => `<span style="--c:${GROUP_COLORS[g]}">${g} ${groupSizes[k].toLocaleString()}</span>`).join("");
+  $("chips").innerHTML = routes.slice(0, 40).map(r => {
+    const [m, p] = r.route.split(" ");
+    const example = p.replace(/\{[^}]+}/g, v => /visit|uuid/i.test(v) ? "3f2b8c1e-9d4a-4f6b-8e2c-1a2b3c4d5e6f"
+      : /id$/i.test(v.slice(1, -1)) ? "42" : "aibolit");
+    return `<button type="button" class="chip" data-m="${m}" data-p="${example}">${m} ${example}</button>`;
+  }).join("") + `<button type="button" class="chip" data-m="GET" data-p="/cats/7">GET /cats/7</button>` +
+    `<button type="button" class="chip" data-m="GET" data-p="/admin">GET /admin</button>`;
+  document.querySelectorAll(".chip").forEach(c => c.onclick = () => {
+    $("form").method.value = c.dataset.m; $("form").path.value = c.dataset.p; sniff();
+  });
+  const q = new URLSearchParams(location.search);
+  if (q.get("path")) { $("form").path.value = q.get("path"); $("form").method.value = (q.get("method") || "GET").toUpperCase(); }
+  sniff();
+}
+
+async function sniff() {
+  const f = $("form");
+  $("go").disabled = true;
+  $("verdict").textContent = "sniffing…";
+  try {
+    const url = `${base}/sniff?method=${encodeURIComponent(f.method.value)}&path=${encodeURIComponent(f.path.value)}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+    const data = await res.json();
+    history.replaceState(null, "", `?method=${encodeURIComponent(f.method.value)}&path=${encodeURIComponent(f.path.value)}`);
+    play(data);
+  } catch (e) {
+    $("verdict").innerHTML = `<span class="err">${e.message}</span>`;
+  } finally {
+    $("go").disabled = false;
+  }
+}
+
+function play(data) {
+  if (run) cancelAnimationFrame(run.frame);
+  const steps = Math.round(data.sniffMs / data.dtMs);
+  run = { data, steps, start: performance.now(), duration: data.sniffMs * Number($("form").speed.value), next: 0, glows: [], frame: 0 };
+  $("replay").disabled = false;
+  $("wall").textContent = data.wallMs.toFixed(0);
+  $("verdict").innerHTML = `<code>${data.request}</code> …`;
+  renderBars(data, false);
+  const raster = $("raster").getContext("2d");
+  raster.fillStyle = "#06070a"; raster.fillRect(0, 0, 600, 300);
+  run.frame = requestAnimationFrame(frame);
+}
+
+function frame(now) {
+  const r = run, d = r.data;
+  const progress = Math.min(1, (now - r.start) / r.duration);
+  const step = progress * r.steps;
+  const ctx = $("brain").getContext("2d");
+  const raster = $("raster").getContext("2d");
+  const bandH = 300 / RASTER_GROUPS.length;
+  while (r.next < d.t.length && d.t[r.next] <= step) {
+    const n = d.n[r.next], g = layout.group[n];
+    if (layout.x[n] >= 0) r.glows.push({ n, born: now });
+    const band = RASTER_GROUPS.indexOf(groupNames[g]);
+    if (band >= 0) {
+      raster.fillStyle = colorOf(g);
+      raster.fillRect(d.t[r.next] / r.steps * 600, band * bandH + (rankInGroup[n] / groupSizes[g]) * (bandH - 2) + 1, 1.2, 1.2);
+    }
+    r.next++;
+  }
+  ctx.globalCompositeOperation = "source-over";
+  ctx.drawImage(background, 0, 0);
+  ctx.globalCompositeOperation = "lighter";
+  const life = 450;
+  r.glows = r.glows.filter(gl => now - gl.born < life);
+  for (const gl of r.glows) {
+    const a = 1 - (now - gl.born) / life, g = layout.group[gl.n];
+    // additive blending: keep each flash faint so thousands of them add up to colour, not to white
+    ctx.globalAlpha = a * (g === 0 ? 0.25 : 0.4);
+    ctx.fillStyle = colorOf(g);
+    const size = g === 0 ? 2 : 3;
+    ctx.beginPath(); ctx.arc(layout.x[gl.n], layout.y[gl.n], size, 0, 6.283); ctx.fill();
+  }
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over";
+  raster.fillStyle = "rgba(251,191,36,.6)"; raster.fillRect(progress * 600, 0, 1, 2);
+  RASTER_GROUPS.forEach((g, k) => { raster.fillStyle = "#8a92a6"; raster.font = "10px ui-monospace, Menlo"; raster.fillText(g, 4, k * bandH + 11); });
+  $("clock").textContent = (progress * d.sniffMs).toFixed(1);
+  $("count").textContent = r.next.toLocaleString();
+  $("bar").style.width = `${progress * 100}%`;
+  if (progress < 1 || r.glows.length) {
+    r.frame = requestAnimationFrame(frame);
+  } else {
+    renderBars(d, true);
+    $("verdict").innerHTML = d.recognized
+      ? `<code>${d.request}</code> → <b style="color:var(--win)">${d.route}</b>, belief ${d.belief.toFixed(2)}`
+      : `<code>${d.request}</code> → <b style="color:var(--lose)">404</b>, the fly does not recognize the smell`;
+  }
+}
+
+function renderBars(d, reveal) {
+  const top = d.beliefs.slice(0, 8);
+  $("bars").innerHTML = top.map((b, k) => {
+    const cls = b.route.startsWith("unknown") ? "unknown" : (reveal && k === 0 && d.recognized ? "win" : "");
+    return `<div class="bar ${cls}"><div class="track"><div class="fill" style="width:${reveal ? (b.belief * 100).toFixed(1) : 0}%"></div>` +
+      `<div class="label">${b.route}</div></div><div class="val">${reveal ? b.belief.toFixed(3) : "…"}</div></div>`;
+  }).join("");
+}
+
+$("form").onsubmit = (e) => { e.preventDefault(); sniff(); };
+$("replay").onclick = () => run && play(run.data);
+init().catch(e => { $("meta").innerHTML = `<span class="err">${e.message}</span>`; });
+</script>
+</body>
+</html>

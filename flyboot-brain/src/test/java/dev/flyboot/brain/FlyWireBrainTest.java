@@ -46,4 +46,28 @@ class FlyWireBrainTest {
         assertTrue(Arrays.stream(a.counts(BrainAtlas.KC)).sum() > 100, "KC spikes: " + Arrays.stream(a.counts(BrainAtlas.KC)).sum());
         assertTrue(Arrays.stream(a.counts(BrainAtlas.ALPN)).sum() > 100);
     }
+
+    @Test
+    void flyWireKnowsWhereItsNeuronsAre() {
+        NeuronPositions p = brain.positions();
+        assertEquals(brain.connectome().neuronCount(), p.size());
+        assertTrue(p.known(0) || p.known(1));
+        assertEquals(3.0, brain.recommendedAplGain());
+    }
+
+    @Test
+    void maleCnsLoadsWithItsOwnTuning() throws Exception {
+        Path data = Path.of(System.getProperty("flyboot.data", "../data"));
+        assumeTrue(Files.exists(data.resolve("malecns-v1.flyb")), "no MaleCNS in " + data.toAbsolutePath());
+        Brain male = Brain.load(data, "malecns-v1");
+        assertEquals(166_700, male.connectome().neuronCount());
+        assertEquals(0.175, male.params().wSynMv(), 1e-12);
+        assertEquals(1.6, male.recommendedAplGain());
+        assertEquals(53, male.atlas().glomeruli().size());
+        assertEquals(java.util.Set.of("ORN_DA1", "ORN_DC3", "ORN_DL3", "ORN_VA1d", "ORN_VA1v"), male.atlas().pheromoneGlomeruli());
+        assertEquals(4064, male.atlas().population(BrainAtlas.KC).length);
+        assertEquals(2, male.atlas().population(BrainAtlas.APL).length);
+        assertTrue(male.atlas().population(BrainAtlas.DN).length > 1000);
+        assertTrue(Brain.available(data).containsAll(List.of("flywire-783", "malecns-v1")));
+    }
 }

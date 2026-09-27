@@ -28,6 +28,7 @@ class FlyDispatcherTest {
     static FlyWebServer server;
     static List<HandlerMethod> handlers;
     static volatile BiFunction<String, String, Integer> forced;
+    static final java.util.Map<String, Integer> outcomes = new java.util.concurrent.ConcurrentHashMap<>();
     static final HttpClient HTTP = HttpClient.newHttpClient();
 
     @BeforeAll
@@ -41,7 +42,8 @@ class FlyDispatcherTest {
                     route = i;
                 }
             }
-            return new RouteOracle.Verdict(route, route < 0 ? 0.2 : 0.9, 1234, 1.5);
+            return new RouteOracle.Verdict(route, route < 0 ? 0.2 : 0.9, 1234, 1.5,
+                    status -> outcomes.put(method + " " + path, status));
         };
         server = FlyWebServer.start(new InetSocketAddress("127.0.0.1", 0),
                 new FlyDispatcher(handlers, oracle, JsonMapper.builder().build()));
@@ -123,6 +125,16 @@ class FlyDispatcherTest {
                 send("GET", "/visits/3f2b8c1e-9d4a-4f6b-8e2c-1a2b3c4d5e6f", null).body());
         assertEquals(400, send("GET", "/visits/not-a-uuid", null).statusCode());
         assertEquals("PATCH", send("PATCH", "/any", null).body());
+    }
+
+    @Test
+    void theOracleLearnsTheStatusOfEveryAnswer() throws Exception {
+        send("GET", "/pets/1", null);
+        send("GET", "/boom", null);
+        send("GET", "/visits/nope", null);
+        assertEquals(200, outcomes.get("GET /pets/1"));
+        assertEquals(500, outcomes.get("GET /boom"));
+        assertEquals(400, outcomes.get("GET /visits/nope"));
     }
 
     @Test

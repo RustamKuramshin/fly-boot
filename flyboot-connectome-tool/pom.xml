@@ -21,6 +21,18 @@
             <groupId>org.duckdb</groupId>
             <artifactId>duckdb_jdbc</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.apache.arrow</groupId>
+            <artifactId>arrow-vector</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.arrow</groupId>
+            <artifactId>arrow-memory-unsafe</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.arrow</groupId>
+            <artifactId>arrow-compression</artifactId>
+        </dependency>
     </dependencies>
 
     <build>
@@ -31,6 +43,17 @@
                 <configuration>
                     <mainClass>dev.flyboot.tool.ConvertFlyWire</mainClass>
                 </configuration>
+                <executions>
+                    <!-- mvn -q -pl flyboot-connectome-tool exec:exec@malecns   (Arrow needs its own JVM flags) -->
+                    <execution>
+                        <id>malecns</id>
+                        <configuration>
+                            <executable>java</executable>
+                            <workingDirectory>${maven.multiModuleProjectDirectory}</workingDirectory>
+                            <commandlineArgs>-Xmx6g --add-opens=java.base/java.nio=ALL-UNNAMED --enable-native-access=ALL-UNNAMED -classpath %classpath dev.flyboot.tool.ConvertMaleCns</commandlineArgs>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

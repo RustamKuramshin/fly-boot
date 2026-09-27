@@ -110,6 +110,59 @@ class LifSimulationTest {
     }
 
     @Test
+    void recordingListsEverySpikeInStepOrder() {
+        Connectome c = randomGraph(2000, 40, 3);
+        LifSimulation sim = new LifSimulation(c, LifParams.shiu2024());
+        sim.setStimulus(Stimulus.builder().addAll(new int[]{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, 120).build());
+        sim.reset(5);
+        sim.run(20);
+        assertEquals(null, sim.recording(), "off by default");
+        sim.setRecording(true);
+        sim.reset(5);
+        sim.run(50);
+        SpikeRecording rec = sim.recording();
+        assertEquals(sim.totalSpikes(), rec.size());
+        int[] perNeuron = new int[c.neuronCount()];
+        for (int i = 0; i < rec.size(); i++) {
+            perNeuron[rec.neurons()[i]]++;
+            assertTrue(i == 0 || rec.steps()[i] >= rec.steps()[i - 1]);
+        }
+        assertArrayEquals(sim.spikeCounts(), perNeuron);
+        assertEquals(0.1, rec.dtMs(), 1e-12);
+    }
+
+    @Test
+    void enginesAreFoundByNameWithAClearErrorOtherwise() {
+        assertEquals("cpu", SimulationEngine.byName("CPU").name());
+        IllegalArgumentException e = org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> SimulationEngine.byName("quantum"));
+        assertTrue(e.getMessage().contains("available: cpu"), e.getMessage());
+    }
+
+    @Test
+    void poolNeverGrowsMoreFliesThanTheEngineAllows() {
+        SimulationEngine one = new SimulationEngine() {
+            @Override
+            public String name() {
+                return "one";
+            }
+
+            @Override
+            public int maxFlies() {
+                return 1;
+            }
+
+            @Override
+            public FlySimulation create(Connectome connectome, LifParams params) {
+                return new LifSimulation(connectome, params);
+            }
+        };
+        Brain brain = SyntheticBrain.create(300, 2);
+        assertEquals(1, brain.pool(8, 10, java.util.List.of(BrainAtlas.KC), one).size());
+        assertEquals(8, brain.pool(8, 10, java.util.List.of(BrainAtlas.KC)).size());
+    }
+
+    @Test
     void connectomeRoundTripsAndShuffleKeepsDegrees() throws Exception {
         Connectome c = randomGraph(300, 15, 5);
         Path file = Files.createTempFile("brain", ".flyb");

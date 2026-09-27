@@ -2,6 +2,7 @@ package dev.flyboot.tool;
 
 import dev.flyboot.brain.Connectome;
 import dev.flyboot.brain.NeuronCatalog;
+import dev.flyboot.brain.NeuronPositions;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -46,8 +47,35 @@ public final class ConvertFlyWire {
             Path tsv = out.resolve("flywire-783.neurons.tsv");
             catalog.write(tsv);
             System.out.printf("Annotations -> %s%n", tsv);
+
+            Path coordinates = raw.resolve("coordinates.csv.gz");
+            if (Files.exists(coordinates)) {
+                NeuronPositions positions = readPositions(db, coordinates, connectome);
+                Path out3 = out.resolve("flywire-783.positions.bin");
+                positions.write(out3);
+                System.out.printf("Positions -> %s%n", out3);
+            }
         }
         System.out.printf("Done in %.1f s%n", (System.nanoTime() - started) / 1e9);
+    }
+
+    /** One point per neuron, "[x y z]" in nanometres; the first point of a neuron wins. */
+    private static NeuronPositions readPositions(Connection db, Path file, Connectome connectome) throws SQLException {
+        NeuronPositions positions = NeuronPositions.unknown(connectome.neuronCount());
+        int known = 0;
+        try (Statement st = db.createStatement();
+             ResultSet rs = st.executeQuery("SELECT root_id, position FROM read_csv('" + file + "', all_varchar = true)")) {
+            while (rs.next()) {
+                int i = connectome.indexOf(Long.parseLong(rs.getString(1)));
+                if (i >= 0 && !positions.known(i)) {
+                    String[] p = rs.getString(2).replaceAll("[\\[\\]]", " ").trim().split("\\s+");
+                    positions.set(i, Float.parseFloat(p[0]), Float.parseFloat(p[1]), Float.parseFloat(p[2]));
+                    known++;
+                }
+            }
+        }
+        System.out.printf("Positions known: %,d of %,d%n", known, connectome.neuronCount());
+        return positions;
     }
 
     /** Row order of Completeness_783.csv defines the neuron index used by the parquet file. */

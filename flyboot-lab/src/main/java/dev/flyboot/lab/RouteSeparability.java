@@ -38,7 +38,7 @@ public final class RouteSeparability {
         int flies = Runtime.getRuntime().availableProcessors();
         List<String> readouts = List.of(BrainAtlas.ALPN, BrainAtlas.KC, BrainAtlas.LHN, BrainAtlas.MBON);
 
-        Brain brain = Brain.load(Lab.DATA);
+        Brain brain = Lab.brain();
         HttpNose nose = new HttpNose(brain.atlas());
 
         SplittableRandom rnd = new SplittableRandom(2026);

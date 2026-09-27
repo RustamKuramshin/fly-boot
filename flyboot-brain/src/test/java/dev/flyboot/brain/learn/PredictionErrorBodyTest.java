@@ -77,6 +77,35 @@ class PredictionErrorBodyTest {
     }
 
     @Test
+    void onlineRewardsStrengthenAndPunishmentsForgetARoute() {
+        SplittableRandom rnd = new SplittableRandom(4);
+        int[][] prototypes = new int[3][];
+        for (int r = 0; r < 3; r++) {
+            prototypes[r] = rnd.ints(0, CELLS).distinct().limit(30).toArray();
+        }
+        List<SparseCode> codes = new ArrayList<>();
+        int[] labels = new int[90];
+        for (int i = 0; i < labels.length; i++) {
+            labels[i] = i % 3;
+            codes.add(noisy(prototypes, labels[i], rnd));
+        }
+        PredictionErrorBody body = new PredictionErrorBody(List.of("a", "b", "c"), CELLS, 0.3);
+        body.train(codes, labels, List.of(random(rnd), random(rnd)), 40, 5, 0, 1);
+
+        SparseCode probe = noisy(prototypes, 1, rnd);
+        assertEquals(1, body.decide(probe).route());
+        double before = body.decide(probe).score();
+        body.reinforce(probe, 1, true, 0.5);
+        assertTrue(body.decide(probe).score() >= before, "reward does not lower the belief");
+
+        for (int i = 0; i < 40 && body.decide(probe).recognized(); i++) {
+            body.reinforce(probe, 1, false, 0.5);
+        }
+        assertTrue(!body.decide(probe).recognized(), "a smell that keeps failing becomes unknown");
+        assertEquals(0, body.decide(noisy(prototypes, 0, rnd)).route(), "other routes are not forgotten");
+    }
+
+    @Test
     void emptyCodeIsNotRecognizedAsARoute() {
         PredictionErrorBody body = new PredictionErrorBody(List.of("a", "b"), 10, 0.6);
         assertTrue(!body.decide(new SparseCode(new int[0], new float[0])).recognized());

@@ -19,19 +19,25 @@ public final class BrainPool {
     private final int size;
     private final double sniffMs;
     private final List<String> readouts;
-    private final BlockingQueue<LifSimulation> idle;
+    private final BlockingQueue<FlySimulation> idle;
+    private final SimulationEngine engine;
     private final AtomicInteger grown = new AtomicInteger();
 
     BrainPool(Brain brain, int size, double sniffMs, List<String> readouts) {
+        this(brain, size, sniffMs, readouts, SimulationEngine.cpu());
+    }
+
+    BrainPool(Brain brain, int size, double sniffMs, List<String> readouts, SimulationEngine engine) {
         if (size < 1) {
             throw new IllegalArgumentException("A pool needs at least one fly, got " + size);
         }
         readouts.forEach(brain.atlas()::population);
         this.brain = brain;
-        this.size = size;
+        this.size = Math.min(size, engine.maxFlies());
         this.sniffMs = sniffMs;
         this.readouts = List.copyOf(readouts);
-        this.idle = new ArrayBlockingQueue<>(size);
+        this.idle = new ArrayBlockingQueue<>(this.size);
+        this.engine = engine;
     }
 
     public Brain brain() {
@@ -50,13 +56,27 @@ public final class BrainPool {
         return readouts;
     }
 
+    public SimulationEngine engine() {
+        return engine;
+    }
+
     public Perception sniff(Odor odor, long seed) {
-        return sniff(brain.atlas().stimulus(odor), seed);
+        return sniff(brain.atlas().stimulus(odor), seed, false);
+    }
+
+    /** Same as {@link #sniff(Odor, long)}, additionally recording every spike. */
+    public Perception sniffRecorded(Odor odor, long seed) {
+        return sniff(brain.atlas().stimulus(odor), seed, true);
     }
 
     public Perception sniff(Stimulus stimulus, long seed) {
-        LifSimulation fly = borrow();
+        return sniff(stimulus, seed, false);
+    }
+
+    private Perception sniff(Stimulus stimulus, long seed, boolean record) {
+        FlySimulation fly = borrow();
         try {
+            fly.setRecording(record);
             fly.setStimulus(stimulus);
             fly.reset(seed);
             long started = System.nanoTime();
@@ -71,22 +91,23 @@ public final class BrainPool {
                 }
                 counts.put(name, c);
             }
-            return new Perception(counts, fly.totalSpikes(), fly.synapticEvents(), fly.timeMs(), wall);
+            return new Perception(counts, fly.totalSpikes(), fly.synapticEvents(), fly.timeMs(), wall, fly.recording());
         } finally {
+            fly.setRecording(false);
             fly.setStimulus(Stimulus.NONE);
             idle.offer(fly);
         }
     }
 
-    private LifSimulation borrow() {
-        LifSimulation fly = idle.poll();
+    private FlySimulation borrow() {
+        FlySimulation fly = idle.poll();
         if (fly != null) {
             return fly;
         }
         int n = grown.get();
         while (n < size) {
             if (grown.compareAndSet(n, n + 1)) {
-                return new LifSimulation(brain.connectome(), brain.params());
+                return engine.create(brain.connectome(), brain.params());
             }
             n = grown.get();
         }

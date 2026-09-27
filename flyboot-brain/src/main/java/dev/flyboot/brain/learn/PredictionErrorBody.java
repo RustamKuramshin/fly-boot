@@ -30,6 +30,8 @@ public final class PredictionErrorBody {
     private final float[][] weights;
     private final float[] bias;
     private double minBelief;
+    /** Decisions read the synapses while online learning may change them. */
+    private final java.util.concurrent.locks.ReadWriteLock lock = new java.util.concurrent.locks.ReentrantReadWriteLock();
 
     /**
      * @param routes    route names; an extra unknown neuron is added after them
@@ -59,6 +61,15 @@ public final class PredictionErrorBody {
 
     /** Beliefs of all route neurons followed by the unknown neuron, summing to 1. */
     public double[] beliefs(SparseCode code) {
+        lock.readLock().lock();
+        try {
+            return beliefsUnlocked(code);
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    private double[] beliefsUnlocked(SparseCode code) {
         double[] z = new double[weights.length];
         double norm = code.norm();
         int[] cells = code.cells();
@@ -114,6 +125,54 @@ public final class PredictionErrorBody {
      */
     public void train(List<SparseCode> codes, int[] labels, List<SparseCode> decoys, int epochs, double rate,
                       double decay, long seed) {
+        lock.writeLock().lock();
+        try {
+            trainUnlocked(codes, labels, decoys, epochs, rate, decay, seed);
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    /**
+     * Online learning from the outcome of a request: one prediction-error step towards the route that answered
+     * well ({@code reward}), or towards the unknown neuron when the answer was bad, so that a smell that keeps
+     * leading to failures is eventually not recognized at all.
+     *
+     * @param route route the fly chose for this code
+     */
+    public void reinforce(SparseCode code, int route, boolean reward, double rate) {
+        if (route < 0 || route >= routes.size()) {
+            throw new IllegalArgumentException("No route " + route);
+        }
+        lock.writeLock().lock();
+        try {
+            step(code, reward ? route : unknown, 1, rate);
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    /** One delta-rule step: dopamine of every compartment = reinforcement - belief. */
+    private void step(SparseCode code, int target, double classWeight, double lr) {
+        double norm = code.norm();
+        if (norm == 0) {
+            return;
+        }
+        double[] p = beliefsUnlocked(code);
+        int[] cells = code.cells();
+        float[] values = code.values();
+        for (int r = 0; r < weights.length; r++) {
+            double dopamine = ((r == target ? 1 : 0) - p[r]) * classWeight * lr;
+            float[] w = weights[r];
+            for (int i = 0; i < cells.length; i++) {
+                w[cells[i]] += (float) (dopamine * values[i] / norm);
+            }
+            bias[r] += (float) (dopamine * 0.1);
+        }
+    }
+
+    private void trainUnlocked(List<SparseCode> codes, int[] labels, List<SparseCode> decoys, int epochs, double rate,
+                               double decay, long seed) {
         int n = codes.size() + decoys.size();
         List<SparseCode> all = new ArrayList<>(codes);
         all.addAll(decoys);
@@ -152,7 +211,7 @@ public final class PredictionErrorBody {
                 if (norm == 0) {
                     continue;
                 }
-                double[] p = beliefs(code);
+                double[] p = beliefsUnlocked(code);
                 double c = classWeight[target[idx]];
                 int[] cells = code.cells();
                 float[] values = code.values();

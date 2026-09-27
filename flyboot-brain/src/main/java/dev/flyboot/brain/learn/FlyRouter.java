@@ -6,6 +6,7 @@ import dev.flyboot.brain.BrainPool;
 import dev.flyboot.brain.Hashing;
 import dev.flyboot.brain.HttpNose;
 import dev.flyboot.brain.Perception;
+import dev.flyboot.brain.SimulationEngine;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -47,13 +48,27 @@ public final class FlyRouter {
      * @param learningRate    learning rate
      * @param minBelief       belief the winning route neuron needs
      * @param seed            seed of the request generator
+     * @param engine          simulation engine, {@code cpu} or another {@link SimulationEngine} on the classpath
      */
     public record Options(double sniffMs, double aplGain, List<CodeChannel> channels, int flies, int samplesPerRoute,
                           int decoysPerRoute, int holdoutPerRoute, int epochs, double learningRate, double minBelief,
-                          long seed) {
+                          long seed, String engine) {
 
         public Options {
             channels = List.copyOf(channels);
+        }
+
+        /** Options on the CPU engine. */
+        public Options(double sniffMs, double aplGain, List<CodeChannel> channels, int flies, int samplesPerRoute,
+                       int decoysPerRoute, int holdoutPerRoute, int epochs, double learningRate, double minBelief,
+                       long seed) {
+            this(sniffMs, aplGain, channels, flies, samplesPerRoute, decoysPerRoute, holdoutPerRoute, epochs,
+                    learningRate, minBelief, seed, SimulationEngine.CPU);
+        }
+
+        public Options withEngine(String name) {
+            return new Options(sniffMs, aplGain, channels, flies, samplesPerRoute, decoysPerRoute, holdoutPerRoute,
+                    epochs, learningRate, minBelief, seed, name);
         }
 
         /** Chosen in phase 2, see README.md. */
@@ -62,19 +77,29 @@ public final class FlyRouter {
                     new CodeChannel(BrainAtlas.ALPN, 685, false, 1)), 0, 60, 30, 10, 100, 5, 0.3, 2026);
         }
 
+        /** Defaults with the APL gain recommended for this brain (its {@code .brain.properties}). */
+        public static Options defaultsFor(Brain brain) {
+            return defaults().withAplGain(brain.recommendedAplGain());
+        }
+
+        public Options withAplGain(double gain) {
+            return new Options(sniffMs, gain, channels, flies, samplesPerRoute, decoysPerRoute, holdoutPerRoute,
+                    epochs, learningRate, minBelief, seed, engine);
+        }
+
         public Options withSamples(int samplesPerRoute, int decoysPerRoute, int holdoutPerRoute) {
             return new Options(sniffMs, aplGain, channels, flies, samplesPerRoute, decoysPerRoute, holdoutPerRoute,
-                    epochs, learningRate, minBelief, seed);
+                    epochs, learningRate, minBelief, seed, engine);
         }
 
         public Options withFlies(int n) {
             return new Options(sniffMs, aplGain, channels, n, samplesPerRoute, decoysPerRoute, holdoutPerRoute,
-                    epochs, learningRate, minBelief, seed);
+                    epochs, learningRate, minBelief, seed, engine);
         }
 
         public Options withSniffMs(double ms) {
             return new Options(ms, aplGain, channels, flies, samplesPerRoute, decoysPerRoute, holdoutPerRoute,
-                    epochs, learningRate, minBelief, seed);
+                    epochs, learningRate, minBelief, seed, engine);
         }
 
         int resolvedFlies() {
@@ -99,7 +124,7 @@ public final class FlyRouter {
      * @param decision   the route neurons' verdict
      * @param perception what the brain did
      */
-    public record Routing(int route, Decision decision, Perception perception) {
+    public record Routing(int route, Decision decision, Perception perception, SparseCode code) {
 
         public boolean recognized() {
             return route >= 0;
@@ -112,6 +137,8 @@ public final class FlyRouter {
     private final HttpNose nose;
     private final PredictionErrorBody body;
     private final Metrics metrics;
+    private final java.util.concurrent.atomic.AtomicLong rewards = new java.util.concurrent.atomic.AtomicLong();
+    private final java.util.concurrent.atomic.AtomicLong punishments = new java.util.concurrent.atomic.AtomicLong();
 
     private FlyRouter(List<RouteTemplate> routes, Options options, BrainPool pool, HttpNose nose,
                       PredictionErrorBody body, Metrics metrics) {
@@ -138,7 +165,8 @@ public final class FlyRouter {
         List<RouteTemplate> endpoints = List.copyOf(routes);
         Brain routingBrain = brain.withAplGain(options.aplGain());
         List<String> readouts = options.channels().stream().map(CodeChannel::layer).distinct().toList();
-        BrainPool pool = routingBrain.pool(options.resolvedFlies(), options.sniffMs(), readouts);
+        SimulationEngine engine = SimulationEngine.byName(options.engine());
+        BrainPool pool = routingBrain.pool(options.resolvedFlies(), options.sniffMs(), readouts, engine);
         HttpNose nose = new HttpNose(routingBrain.atlas());
         String fingerprint = fingerprint(routingBrain, endpoints, options, nose);
         Path cacheFile = cacheDir == null ? null : cacheDir.resolve("flyroute-" + fingerprint + ".bin");
@@ -223,8 +251,49 @@ public final class FlyRouter {
     public Routing route(String method, String path) {
         String line = method.toUpperCase(java.util.Locale.ROOT) + " " + path;
         Perception p = pool.sniff(nose.smell(method, path), Hashing.hash64(line));
-        Decision d = body.decide(SparseCode.of(p, options.channels()));
-        return new Routing(d.route(), d, p);
+        SparseCode code = SparseCode.of(p, options.channels());
+        Decision d = body.decide(code);
+        return new Routing(d.route(), d, p, code);
+    }
+
+    /**
+     * Learns from how the request the fly routed was answered: a good answer rewards the chosen route, a bad one
+     * teaches the fly that this smell is unknown. Unrecognized requests teach nothing.
+     */
+    public void reinforce(Routing routing, boolean reward, double rate) {
+        if (!routing.recognized()) {
+            return;
+        }
+        body.reinforce(routing.code(), routing.route(), reward, rate);
+        (reward ? rewards : punishments).incrementAndGet();
+    }
+
+    /**
+     * Like {@link #route} but records every spike of the sniff and returns the belief of every route neuron,
+     * the unknown neuron last. For showing what the fly did; does not learn.
+     */
+    public Explanation explain(String method, String path) {
+        String line = method.toUpperCase(java.util.Locale.ROOT) + " " + path;
+        Perception p = pool.sniffRecorded(nose.smell(method, path), Hashing.hash64(line));
+        SparseCode code = SparseCode.of(p, options.channels());
+        Decision d = body.decide(code);
+        return new Explanation(new Routing(d.route(), d, p, code), body.beliefs(code), nose.smell(method, path));
+    }
+
+    /**
+     * @param beliefs belief of every route neuron in {@link #routes()} order, then of the unknown neuron
+     * @param odor    what the nose made of the request
+     */
+    public record Explanation(Routing routing, double[] beliefs, dev.flyboot.brain.Odor odor) {
+    }
+
+    /** Online rewards and punishments received since start. */
+    public long rewards() {
+        return rewards.get();
+    }
+
+    public long punishments() {
+        return punishments.get();
     }
 
     public List<RouteTemplate> routes() {

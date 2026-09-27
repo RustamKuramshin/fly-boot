@@ -58,6 +58,18 @@ class FlyRouterTest {
     }
 
     @Test
+    void reinforcementIsCountedAndIgnoredForUnrecognizedRequests() throws Exception {
+        FlyRouter router = FlyRouter.learn(SyntheticBrainAccess.create(1500, 11), ROUTES, SMALL, null, s -> { });
+        FlyRouter.Routing any = router.route("GET", "/pets/1");
+        FlyRouter.Routing known = new FlyRouter.Routing(1, any.decision(), any.perception(), any.code());
+        router.reinforce(known, true, 0.5);
+        router.reinforce(known, false, 0.5);
+        router.reinforce(new FlyRouter.Routing(-1, known.decision(), known.perception(), known.code()), false, 0.5);
+        assertEquals(1, router.rewards());
+        assertEquals(1, router.punishments());
+    }
+
+    @Test
     void nothingToLearnIsAnError() {
         assertThrows(IllegalArgumentException.class,
                 () -> FlyRouter.learn(SyntheticBrainAccess.create(300, 1), List.of(), SMALL, null, s -> { }));

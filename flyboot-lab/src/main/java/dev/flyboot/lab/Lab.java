@@ -11,6 +11,15 @@ import java.nio.file.Path;
 final class Lab {
 
     static final Path DATA = Path.of(System.getProperty("flyboot.data", "data"));
+    static final String BRAIN = System.getProperty("flyboot.brain.name", dev.flyboot.brain.Brain.DEFAULT_NAME);
+
+    static dev.flyboot.brain.Brain brain() {
+        try {
+            return dev.flyboot.brain.Brain.load(DATA, BRAIN);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
 
     private Lab() {
     }

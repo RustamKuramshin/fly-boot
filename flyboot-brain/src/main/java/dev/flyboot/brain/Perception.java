@@ -10,12 +10,17 @@ import java.util.Map;
  * @param synapticEvents spike deliveries along edges, the main cost of the simulation
  * @param brainMs        simulated brain time
  * @param wallNanos      wall-clock time of the simulation
+ * @param spikes         every spike, when the sniff was recorded; otherwise null
  */
 public record Perception(Map<String, int[]> counts, long totalSpikes, long synapticEvents, double brainMs,
-                         long wallNanos) {
+                         long wallNanos, SpikeRecording spikes) {
 
     public Perception {
         counts = Map.copyOf(counts);
+    }
+
+    public Perception(Map<String, int[]> counts, long totalSpikes, long synapticEvents, double brainMs, long wallNanos) {
+        this(counts, totalSpikes, synapticEvents, brainMs, wallNanos, null);
     }
 
     public int[] counts(String population) {

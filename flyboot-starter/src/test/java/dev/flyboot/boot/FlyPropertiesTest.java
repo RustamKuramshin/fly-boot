@@ -39,13 +39,24 @@ class FlyPropertiesTest {
 
     @Test
     void routerOptionsDefaultToThePhaseTwoChoiceAndCanBeOverridden() {
-        FlyRouter.Options defaults = FlyApplication.routerOptions(new FlyProperties(Map.of(), Map.of()));
-        assertEquals(FlyRouter.Options.defaults(), defaults);
+        dev.flyboot.brain.Brain brain = brainWithAplGain(1.6);
+        FlyRouter.Options defaults = FlyApplication.routerOptions(new FlyProperties(Map.of(), Map.of()), brain);
+        assertEquals(FlyRouter.Options.defaults().withAplGain(1.6), defaults, "APL gain comes from the brain");
         FlyRouter.Options tuned = FlyApplication.routerOptions(new FlyProperties(Map.of(
-                "flyboot.router.sniff-ms", "50", "flyboot.learning.samples-per-route", "20"), Map.of()));
+                "flyboot.router.sniff-ms", "50", "flyboot.learning.samples-per-route", "20",
+                "flyboot.router.apl-gain", "2"), Map.of()), brain);
+        assertEquals(2, tuned.aplGain());
         assertEquals(50, tuned.sniffMs());
         assertEquals(20, tuned.samplesPerRoute());
         assertEquals(defaults.channels(), tuned.channels());
+    }
+
+    static dev.flyboot.brain.Brain brainWithAplGain(double gain) {
+        dev.flyboot.brain.Connectome c = new dev.flyboot.brain.Connectome("tiny", new long[]{1}, new int[]{0, 0},
+                new int[0], new short[0]);
+        dev.flyboot.brain.NeuronCatalog catalog = new dev.flyboot.brain.NeuronCatalog(java.util.List.of(
+                new dev.flyboot.brain.NeuronCatalog.Neuron(0, 1, "", "", "", "", "", "", "")));
+        return new dev.flyboot.brain.Brain(c, catalog, dev.flyboot.brain.LifParams.shiu2024(), gain);
     }
 
     @Test

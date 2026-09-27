@@ -23,10 +23,10 @@ public final class RouterDemo {
             "GET /cats/7", "GET /admin", "GET /owners/42/cars", "PATCH /pets/7", "GET /api/v2/users/1");
 
     public static void main(String[] args) throws Exception {
-        Brain brain = Brain.load(Lab.DATA);
-        FlyRouter.Options options = FlyRouter.Options.defaults();
+        Brain brain = Lab.brain();
+        FlyRouter.Options options = FlyRouter.Options.defaultsFor(brain);
         FlyRouter router = FlyRouter.learn(brain, LearningStudy.ROUTES, options, Path.of(".flyboot"), System.out::println);
-        report("FlyWire v783", router);
+        report(brain.connectome().name(), router);
 
         System.out.println();
         for (String request : REQUESTS) {

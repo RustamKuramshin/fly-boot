@@ -35,7 +35,18 @@ X-Fly-Sniff-Ms: 75.0
 3. Every request becomes an odor: the method excites a pheromone glomerulus, path features excite ordinary glomeruli. Then 75 ms of brain activity are simulated with the Shiu et al. 2024 model, validated against the original Brian2 code.
 4. The most confident route neuron wins. If it is the "unknown odor" neuron, the answer is 404. The dispatcher never matches path templates: it only carries out the fly's decision.
 
-Accuracy on unseen path variable values is 96-98%, about 70-75% of requests to nonexistent addresses are rejected, routing a request takes 50-75 ms. With the brain's wiring shuffled (`--flyboot.brain.control=shuffled`) accuracy drops to 22%.
+Accuracy on unseen path variable values is 96-100%, about 70-80% of requests to nonexistent addresses are rejected, routing a request takes 50-75 ms on CPU and 22-51 ms on GPU. With the brain's wiring shuffled (`--flyboot.brain.control=shuffled`) accuracy drops to 22%.
+
+![Spikes of one sniff in the male fly brain](assets/malecns-keepers-flies.jpg)
+
+## Features
+
+- **Two brains:** `--flyboot.brain.name=flywire-783` (female, brain, 139k neurons) or `malecns-v1` (male, brain and ventral nerve cord, 167k neurons).
+- **Two engines:** a plain JVM on the CPU or TornadoVM on the GPU (`./scripts/run-demo.sh --tornado`), a sniff is 4-5x faster.
+- **Online learning:** `--flyboot.learning.online.enabled=true`. 2xx is a reward, 5xx and 405 are a punishment.
+- **Brain in the browser:** `http://localhost:8080/actuator/brain/ui` shows how a request lights up the neurons and which route neuron wins.
+- **Actuator:** `/actuator/health`, `/actuator/brain`, `/actuator/routes`.
+
 
 ## Quick start
 
@@ -46,11 +57,29 @@ You need JDK 25 (`.java-version` for jenv) and Maven.
 ```
 
 ```bash
-mvn -q -pl flyboot-demo exec:exec -Ddemo.args="--server.port=8080"
+./scripts/run-demo.sh --server.port=8080
+```
+
+Then open `http://localhost:8080/actuator/brain/ui` in a browser.
+
+The male brain (about 560 MB):
+
+```bash
+./scripts/download-data.sh --malecns && mvn -q -pl flyboot-connectome-tool exec:exec@malecns
 ```
 
 ```bash
-curl -i localhost:8080/actuator/brain
+./scripts/run-demo.sh --flyboot.brain.name=malecns-v1
+```
+
+GPU (Apple Silicon, Metal):
+
+```bash
+sdk install tornadovm 7.0.1-jdk22plus-metal
+```
+
+```bash
+./scripts/run-demo.sh --tornado
 ```
 
 
@@ -61,8 +90,9 @@ curl -i localhost:8080/actuator/brain
 | `flyboot-brain` | Connectome, LIF engine (a port of Shiu et al. 2024, validated against Brian2), population atlas, HTTP "nose", fly pool, route learning (`FlyRouter`) |
 | `flyboot-core` | `@Component`, `@FlyBootApplication`, package scanning, constructor injection |
 | `flyboot-web` | `@RestController`, `@GetMapping`..., `@PathVariable`, `@RequestParam`, `@RequestBody`, `ResponseEntity`; HTTP server and a dispatcher where the fly picks the route |
-| `flyboot-starter` | `FlyApplication.run`, `application.properties`, banner, `/actuator/*` |
-| `flyboot-connectome-tool` | Converts FlyWire v783 to `.flyb` with DuckDB |
+| `flyboot-starter` | `FlyApplication.run`, `application.properties`, banner, `/actuator/*`, the `/actuator/brain/ui` page |
+| `flyboot-tornado` | Optional GPU engine on TornadoVM; harmless on a plain JVM |
+| `flyboot-connectome-tool` | Converts FlyWire v783 (DuckDB) and MaleCNS v1.0 (Apache Arrow) to `.flyb` |
 | `flyboot-lab` | Experiments of phases 0-2 and a JMH benchmark |
 | `tools/reference` | Reference run of the original model on Brian2 and the comparison |
 
@@ -74,6 +104,7 @@ curl -i localhost:8080/actuator/brain
 - Phase 2 - learning: why Kenyon cells, APL x3, prediction error and decoys for 404.
 - Phase 3 - annotations, server, dispatcher.
 - Phase 4 - starter, actuator, demo.
+- Phase 5 - MaleCNS, online learning, GPU, visualization.
 
 ## Data and attribution
 
@@ -81,5 +112,6 @@ curl -i localhost:8080/actuator/brain
   - Dorkenwald et al., Nature 2024;
   - Schlegel et al., Nature 2024;
   - neurotransmitter predictions: Eckstein et al., Cell 2024.
+- MaleCNS v1.0 connectome (Janelia FlyEM, Cambridge, Google; Cell 2026), license [CC BY 4.0](https://male-cns.janelia.org/).
 - Neuron model and prepared connectivity files: Shiu et al., "A Drosophila computational brain model reveals sensorimotor processing", Nature 2024, [philshiu/Drosophila_brain_model](https://github.com/philshiu/Drosophila_brain_model) (MIT). A copy of `model.py` is in `tools/reference/vendor`.
 - The learning rule follows Bennett, Philippides, Nowotny (Nat Commun 2021): dopaminergic neurons compute a reward prediction error.

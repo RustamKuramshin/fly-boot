@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>dev.flyboot</groupId>
+        <artifactId>flyboot-parent</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+    </parent>
+    <artifactId>flyboot-tornado</artifactId>
+    <name>FlyBoot Tornado</name>
+    <description>Optional GPU engine on TornadoVM (Apple Metal, OpenCL, CUDA); inert on a plain JVM</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>dev.flyboot</groupId>
+            <artifactId>flyboot-brain</artifactId>
+        </dependency>
+        <!-- the TornadoVM SDK brings the runtime and its own copy of the API; compile against the API only -->
+        <dependency>
+            <groupId>io.github.beehive-lab</groupId>
+            <artifactId>tornado-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+</project>

@@ -72,6 +72,8 @@ public final class FlyWebApplication implements AutoCloseable {
         private int port = 8080;
         private JsonMapper json = JsonMapper.builder().build();
         private Consumer<String> log = System.out::println;
+        private boolean onlineLearning;
+        private double onlineRate = 0.5;
 
         public Builder scanPackages(String... names) {
             packages.addAll(List.of(names));
@@ -120,6 +122,13 @@ public final class FlyWebApplication implements AutoCloseable {
             return this;
         }
 
+        /** Keep learning from response statuses while serving; off by default. */
+        public Builder onlineLearning(boolean enabled, double rate) {
+            onlineLearning = enabled;
+            onlineRate = rate;
+            return this;
+        }
+
         public Builder log(Consumer<String> value) {
             log = value;
             return this;
@@ -151,7 +160,10 @@ public final class FlyWebApplication implements AutoCloseable {
                     templates.size(), 100 * m.accuracy(), 100 * m.decoyRejection(),
                     m.fromCache() ? " (synapses from cache)" : String.format(java.util.Locale.ROOT,
                             " (learned from %d sniffs in %.1f s)", m.sniffs(), m.learnMillis() / 1000.0)));
-            FlyDispatcher dispatcher = new FlyDispatcher(handlers, new FlyRouterOracle(router), json);
+            if (onlineLearning) {
+                log.accept("Online learning is on: 2xx rewards the fly, 5xx and 405 punish it (rate " + onlineRate + ")");
+            }
+            FlyDispatcher dispatcher = new FlyDispatcher(handlers, new FlyRouterOracle(router, onlineLearning, onlineRate), json);
             runtime.start(brain, router, dispatcher);
             FlyWebServer server = FlyWebServer.start(new InetSocketAddress(host, port), dispatcher);
             return new FlyWebApplication(context, router, dispatcher, server);
