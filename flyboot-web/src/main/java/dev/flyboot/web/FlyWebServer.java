@@ -13,6 +13,7 @@ public final class FlyWebServer implements AutoCloseable {
 
     private final HttpServer server;
     private final ExecutorService executor;
+    private final java.util.concurrent.atomic.AtomicBoolean closed = new java.util.concurrent.atomic.AtomicBoolean();
 
     private FlyWebServer(HttpServer server, ExecutorService executor) {
         this.server = server;
@@ -37,9 +38,12 @@ public final class FlyWebServer implements AutoCloseable {
         return server.getAddress();
     }
 
+    /** Stops the server; later calls do nothing. */
     @Override
     public void close() {
-        server.stop(0);
-        executor.close();
+        if (closed.compareAndSet(false, true)) {
+            server.stop(0);
+            executor.close();
+        }
     }
 }

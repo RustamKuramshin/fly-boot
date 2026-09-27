@@ -15,6 +15,7 @@
         <module>flyboot-brain</module>
         <module>flyboot-core</module>
         <module>flyboot-web</module>
+        <module>flyboot-starter</module>
         <module>flyboot-connectome-tool</module>
         <module>flyboot-lab</module>
     </modules>
@@ -44,6 +45,11 @@
             <dependency>
                 <groupId>dev.flyboot</groupId>
                 <artifactId>flyboot-web</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.flyboot</groupId>
+                <artifactId>flyboot-starter</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

@@ -42,6 +42,19 @@ public final class FlyDispatcher implements HttpHandler {
     private final JsonMapper json;
     private final AtomicLong requests = new AtomicLong();
     private final AtomicLong recognized = new AtomicLong();
+    private final java.util.ArrayDeque<Trace> traces = new java.util.ArrayDeque<>();
+
+    /**
+     * One answered request, as the fly saw it.
+     *
+     * @param route  endpoint the fly chose, or null when it did not recognize the smell
+     */
+    public record Trace(java.time.Instant at, String method, String path, String route, int status, double belief,
+                        long spikes, double sniffMs, long totalMs) {
+    }
+
+    /** How many recent requests {@link #recentTraces()} keeps. */
+    public static final int TRACE_CAPACITY = 50;
 
     public FlyDispatcher(List<HandlerMethod> handlers, RouteOracle oracle, JsonMapper json) {
         this.handlers = List.copyOf(handlers);
@@ -61,6 +74,22 @@ public final class FlyDispatcher implements HttpHandler {
         return recognized.get();
     }
 
+    /** The most recent requests, newest first. */
+    public List<Trace> recentTraces() {
+        synchronized (traces) {
+            return List.copyOf(traces);
+        }
+    }
+
+    private void trace(Trace t) {
+        synchronized (traces) {
+            traces.addFirst(t);
+            while (traces.size() > TRACE_CAPACITY) {
+                traces.removeLast();
+            }
+        }
+    }
+
     @Override
     public void handle(HttpExchange exchange) throws IOException {
         long started = System.nanoTime();
@@ -71,6 +100,9 @@ public final class FlyDispatcher implements HttpHandler {
             RouteOracle.Verdict v = oracle.consult(method, rawPath);
             int status = answer(exchange, method, rawPath, v);
             long ms = (System.nanoTime() - started) / 1_000_000;
+            trace(new Trace(java.time.Instant.now(), method, rawPath,
+                    v.recognized() ? handlers.get(v.route()).template().id() : null, status, v.belief(), v.spikes(),
+                    v.sniffMs(), ms));
             LOG.log(System.Logger.Level.INFO, () -> String.format(Locale.ROOT,
                     "%s %s -> %s: %d in %d ms (belief %.2f, %d spikes, sniff %.0f ms)", method, rawPath,
                     v.recognized() ? handlers.get(v.route()).template().id() + " " + handlers.get(v.route()).describe()

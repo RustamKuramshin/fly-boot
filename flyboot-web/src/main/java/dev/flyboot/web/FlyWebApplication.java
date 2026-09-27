@@ -132,7 +132,10 @@ public final class FlyWebApplication implements AutoCloseable {
             FlyContext context = packages.isEmpty() ? new FlyContext() : FlyContext.ofPackages(packages.toArray(String[]::new));
             components.forEach(context::registerComponent);
             singletons.forEach(context::registerSingleton);
+            FlyRuntime runtime = new FlyRuntime();
             context.registerSingleton(brain);
+            context.registerSingleton(runtime);
+            context.registerSingleton(json);
             context.refresh();
 
             List<HandlerMethod> handlers = HandlerRegistry.collect(context.getBeansWithAnnotation(RestController.class));
@@ -149,6 +152,7 @@ public final class FlyWebApplication implements AutoCloseable {
                     m.fromCache() ? " (synapses from cache)" : String.format(java.util.Locale.ROOT,
                             " (learned from %d sniffs in %.1f s)", m.sniffs(), m.learnMillis() / 1000.0)));
             FlyDispatcher dispatcher = new FlyDispatcher(handlers, new FlyRouterOracle(router), json);
+            runtime.start(brain, router, dispatcher);
             FlyWebServer server = FlyWebServer.start(new InetSocketAddress(host, port), dispatcher);
             return new FlyWebApplication(context, router, dispatcher, server);
         }
