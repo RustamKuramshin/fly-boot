@@ -1,0 +1,5 @@
+brian2==2.10.1
+pandas
+pyarrow
+cython
+joblib

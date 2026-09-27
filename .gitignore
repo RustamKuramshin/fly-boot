@@ -1,0 +1,8 @@
+target/
+data/
+.venv/
+.flyboot/
+*.iml
+.idea/
+__pycache__/
+tools/reference/results/
