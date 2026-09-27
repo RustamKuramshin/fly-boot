@@ -48,7 +48,7 @@ class LifSimulationTest {
             double t = s * p.dtMs();
             double expected = w * ts / (ts - tm) * (Math.exp(-t / ts) - Math.exp(-t / tm));
             peak = Math.max(peak, expected);
-            assertEquals(expected, voltage(sim, 1) - p.vRestMv(), 1e-12, "at " + t + " ms");
+            assertEquals(expected, sim.voltage(1) - p.vRestMv(), 1e-7, "at " + t + " ms"); // float state
             sim.step();
         }
         assertEquals(0.043, peak, 0.001); // ~0.157 * w_syn, as derived from Shiu et al.
@@ -138,16 +138,6 @@ class LifSimulationTest {
             d[j]++;
         }
         return d;
-    }
-
-    private static double voltage(LifSimulation sim, int neuron) {
-        try {
-            var f = LifSimulation.class.getDeclaredField("v");
-            f.setAccessible(true);
-            return ((double[]) f.get(sim))[neuron];
-        } catch (ReflectiveOperationException e) {
-            throw new AssertionError(e);
-        }
     }
 
     /** Random graph, 80% excitatory neurons, 1..40 synapses per edge. */

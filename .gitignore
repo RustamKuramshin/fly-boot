@@ -6,3 +6,4 @@ data/
 .idea/
 __pycache__/
 tools/reference/results/
+.DS_Store

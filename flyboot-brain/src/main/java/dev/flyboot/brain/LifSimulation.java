@@ -17,10 +17,24 @@ import java.util.SplittableRandom;
  * <p>
  * Almost the whole brain is at rest at any moment, so only neurons away from rest are kept in an active list
  * (see {@link LifParams#restEpsilonMv()}); spikes are propagated event by event along CSR rows.
+ * The cost is dominated by random access on synaptic delivery, so the hot per-neuron state is packed into one
+ * {@code int[]} record of 16 bytes: u = v - v_0 and g as float bits (small numbers keep float precision),
+ * the input gate with the active flag, the update gate.
  * <p>
  * The graph is shared and read-only; an instance holds the mutable state of one fly and is not thread-safe.
  */
 public final class LifSimulation {
+
+    private static final int STRIDE = 4;
+    /** u = v - v_0, the deviation from rest. */
+    private static final int U = 0;
+    private static final int G = 1;
+    /** First step at which input written to v or g is accepted (Brian2 conditional write), plus the ACTIVE bit. */
+    private static final int INPUT = 2;
+    /** First step at which the neuron integrates again (Brian2 not_refractory in the "groups" slot). */
+    private static final int UPDATE = 3;
+    private static final int ACTIVE = 1 << 30;
+    private static final int STEP_MASK = ACTIVE - 1;
 
     private final Connectome connectome;
     private final LifParams params;
@@ -30,27 +44,21 @@ public final class LifSimulation {
     private final short[] weight;
 
     private final double vRest;
-    private final double vReset;
-    private final double vThreshold;
-    private final double decayV;
-    private final double decayG;
-    private final double couplingGtoV;
-    private final double wSyn;
-    private final double epsilon;
+    private final float uReset;
+    private final float uThreshold;
+    private final float decayV;
+    private final float decayG;
+    private final float couplingGtoV;
+    private final float wSyn;
+    private final float poissonKick;
+    private final float epsilon;
     private final boolean dense;
     private final int delaySteps;
     private final int refractorySteps;
 
-    private final double[] v;
-    private final double[] g;
+    private final int[] state;
     private final int[] neuronRefractory;
-    /** First step at which the neuron integrates again (Brian2 not_refractory in the "groups" slot). */
-    private final int[] updateOpenAt;
-    /** First step at which input written to v or g is accepted (Brian2 conditional write on not_refractory). */
-    private final int[] inputOpenAt;
     private final int[] spikeCount;
-
-    private final boolean[] active;
     private int[] activeList;
     private int activeSize;
 
@@ -79,25 +87,22 @@ public final class LifSimulation {
         double tm = params.tauMembraneMs();
         double ts = params.tauSynapseMs();
         this.vRest = params.vRestMv();
-        this.vReset = params.vResetMv();
-        this.vThreshold = params.vThresholdMv();
-        this.decayV = Math.exp(-dt / tm);
-        this.decayG = Math.exp(-dt / ts);
+        this.uReset = (float) (params.vResetMv() - vRest);
+        this.uThreshold = (float) (params.vThresholdMv() - vRest);
+        this.decayV = (float) Math.exp(-dt / tm);
+        this.decayG = (float) Math.exp(-dt / ts);
         // Exact solution of du/dt = (g - u) / tm with g decaying at ts: u' = u*decayV + g*ts/(ts-tm)*(decayG-decayV)
-        this.couplingGtoV = ts / (ts - tm) * (decayG - decayV);
-        this.wSyn = params.wSynMv();
-        this.epsilon = params.restEpsilonMv();
+        this.couplingGtoV = (float) (ts / (ts - tm) * (Math.exp(-dt / ts) - Math.exp(-dt / tm)));
+        this.wSyn = (float) params.wSynMv();
+        this.poissonKick = (float) params.poissonKickMv();
+        this.epsilon = (float) params.restEpsilonMv();
         this.dense = epsilon <= 0;
         this.delaySteps = params.steps(params.delayMs());
         this.refractorySteps = params.steps(params.refractoryMs());
 
-        this.v = new double[n];
-        this.g = new double[n];
+        this.state = new int[n * STRIDE];
         this.neuronRefractory = new int[n];
-        this.updateOpenAt = new int[n];
-        this.inputOpenAt = new int[n];
         this.spikeCount = new int[n];
-        this.active = new boolean[n];
         this.activeList = new int[dense ? n : 1024];
         this.ring = new int[delaySteps + 1][64];
         this.ringSize = new int[delaySteps + 1];
@@ -114,14 +119,15 @@ public final class LifSimulation {
 
     /** Returns the fly to rest: all neurons at v_0, no pending spikes, counters cleared. */
     public void reset(long seed) {
-        Arrays.fill(v, vRest);
-        Arrays.fill(g, 0);
-        Arrays.fill(updateOpenAt, 0);
-        Arrays.fill(inputOpenAt, 0);
+        for (int b = 0; b < state.length; b += STRIDE) {
+            state[b + U] = 0;
+            state[b + G] = 0;
+            state[b + INPUT] = dense ? ACTIVE : 0;
+            state[b + UPDATE] = 0;
+        }
         Arrays.fill(neuronRefractory, refractorySteps);
         Arrays.fill(spikeCount, 0);
         Arrays.fill(ringSize, 0);
-        Arrays.fill(active, dense);
         activeSize = 0;
         if (dense) {
             for (int i = 0; i < n; i++) {
@@ -176,30 +182,34 @@ public final class LifSimulation {
     public void step() {
         final int t = step;
         final int slot = t % (delaySteps + 1);
+        final int[] s = state;
         ringSize[slot] = 0;
 
         // state update + threshold (Brian2 "groups" and "thresholds" slots) over the active neurons
         int kept = 0;
         for (int k = 0, size = activeSize; k < size; k++) {
             int i = activeList[k];
-            if (t >= updateOpenAt[i]) {
-                double gi = g[i];
-                double vi = vRest + (v[i] - vRest) * decayV + gi * couplingGtoV;
-                v[i] = vi;
-                g[i] = gi * decayG;
-                if (vi > vThreshold) {
+            int b = i * STRIDE;
+            float ui = Float.intBitsToFloat(s[b + U]);
+            float gi = Float.intBitsToFloat(s[b + G]);
+            if (t >= s[b + UPDATE]) {
+                ui = ui * decayV + gi * couplingGtoV;
+                gi = gi * decayG;
+                s[b + U] = Float.floatToRawIntBits(ui);
+                s[b + G] = Float.floatToRawIntBits(gi);
+                if (ui > uThreshold) {
                     pushSpike(slot, i);
                     int rfc = neuronRefractory[i];
-                    updateOpenAt[i] = t + rfc;
-                    inputOpenAt[i] = t + Math.max(rfc, 1);
+                    s[b + UPDATE] = t + rfc;
+                    s[b + INPUT] = (t + Math.max(rfc, 1)) | ACTIVE;
                 }
             }
-            if (dense || Math.abs(v[i] - vRest) >= epsilon || Math.abs(g[i]) >= epsilon) {
+            if (dense || Math.abs(ui) >= epsilon || Math.abs(gi) >= epsilon) {
                 activeList[kept++] = i;
             } else {
-                v[i] = vRest;
-                g[i] = 0;
-                active[i] = false;
+                s[b + U] = 0;
+                s[b + G] = 0;
+                s[b + INPUT] &= STEP_MASK;
             }
         }
         neuronUpdates += activeSize;
@@ -215,10 +225,14 @@ public final class LifSimulation {
                 int end = rowPtr[pre + 1];
                 synapticEvents += end - start;
                 for (int e = start; e < end; e++) {
-                    int j = post[e];
-                    if (t >= inputOpenAt[j]) {
-                        g[j] += weight[e] * wSyn;
-                        activate(j);
+                    int b = post[e] * STRIDE;
+                    int gate = s[b + INPUT];
+                    if (t >= (gate & STEP_MASK)) {
+                        s[b + G] = Float.floatToRawIntBits(Float.intBitsToFloat(s[b + G]) + weight[e] * wSyn);
+                        if ((gate & ACTIVE) == 0) {
+                            s[b + INPUT] = gate | ACTIVE;
+                            addActive(post[e]);
+                        }
                     }
                 }
             }
@@ -228,9 +242,14 @@ public final class LifSimulation {
         for (int i = 0; i < stimulusNextStep.length; i++) {
             if (stimulusNextStep[i] == t) {
                 int j = stimulus.neuron(i);
-                if (t >= inputOpenAt[j]) {
-                    v[j] += params.poissonKickMv();
-                    activate(j);
+                int b = j * STRIDE;
+                int gate = s[b + INPUT];
+                if (t >= (gate & STEP_MASK)) {
+                    s[b + U] = Float.floatToRawIntBits(Float.intBitsToFloat(s[b + U]) + poissonKick);
+                    if ((gate & ACTIVE) == 0) {
+                        s[b + INPUT] = gate | ACTIVE;
+                        addActive(j);
+                    }
                 }
                 stimulusNextStep[i] = t + waitSteps(i);
             }
@@ -238,24 +257,22 @@ public final class LifSimulation {
 
         // reset ("resets" slot)
         int[] fired = ring[slot];
+        int resetBits = Float.floatToRawIntBits(uReset);
         for (int k = 0, size = ringSize[slot]; k < size; k++) {
             int i = fired[k];
-            v[i] = vReset;
-            g[i] = 0;
+            s[i * STRIDE + U] = resetBits;
+            s[i * STRIDE + G] = 0;
             spikeCount[i]++;
         }
         totalSpikes += ringSize[slot];
         step++;
     }
 
-    private void activate(int neuron) {
-        if (!active[neuron]) {
-            active[neuron] = true;
-            if (activeSize == activeList.length) {
-                activeList = Arrays.copyOf(activeList, Math.min(n, activeSize * 2));
-            }
-            activeList[activeSize++] = neuron;
+    private void addActive(int neuron) {
+        if (activeSize == activeList.length) {
+            activeList = Arrays.copyOf(activeList, Math.min(n, activeSize * 2));
         }
+        activeList[activeSize++] = neuron;
     }
 
     private void pushSpike(int slot, int neuron) {
@@ -265,6 +282,11 @@ public final class LifSimulation {
         }
         ring[slot][size] = neuron;
         ringSize[slot] = size + 1;
+    }
+
+    /** Membrane potential of the neuron in mV. */
+    public double voltage(int neuron) {
+        return vRest + Float.intBitsToFloat(state[neuron * STRIDE + U]);
     }
 
     public int spikeCount(int neuron) {

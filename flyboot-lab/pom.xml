@@ -10,12 +10,48 @@
     </parent>
     <artifactId>flyboot-lab</artifactId>
     <name>FlyBoot Lab</name>
-    <description>Feasibility experiments: reference validation, odor separability, latency</description>
+    <description>Experiments and benchmarks: reference validation, odor and route separability, JMH</description>
 
     <dependencies>
         <dependency>
             <groupId>dev.flyboot</groupId>
             <artifactId>flyboot-brain</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.openjdk.jmh</groupId>
+            <artifactId>jmh-core</artifactId>
+        </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.openjdk.jmh</groupId>
+                            <artifactId>jmh-generator-annprocess</artifactId>
+                            <version>${jmh.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <plugin>
+                <!-- mvn -q -pl flyboot-lab exec:exec -Djmh.args="SniffBenchmark" -->
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <configuration>
+                    <executable>java</executable>
+                    <workingDirectory>${maven.multiModuleProjectDirectory}</workingDirectory>
+                    <commandlineArgs>-classpath %classpath org.openjdk.jmh.Main ${jmh.args}</commandlineArgs>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <properties>
+        <jmh.args>SniffBenchmark</jmh.args>
+    </properties>
 </project>

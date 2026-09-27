@@ -2,7 +2,7 @@
 
 A Spring Boot-style web framework in which HTTP request routing is done by a simulated brain of the fruit fly *Drosophila melanogaster*, built from the real connectome: 138,639 neurons and 15 million connections.
 
-Status: phase 0, the feasibility check, is done.
+Status: phase 0, the feasibility check, and phase 1, the brain module, are done.
 
 - Research
 - Architecture and plan
@@ -11,9 +11,9 @@ Status: phase 0, the feasibility check, is done.
 
 | Module | What is inside |
 |---|---|
-| `flyboot-brain` | CSR connectome graph, LIF engine (a port of the Shiu et al. 2024 model, validated against Brian2), neuron annotations |
+| `flyboot-brain` | Connectome, LIF engine (a port of the Shiu et al. 2024 model, validated against Brian2), population atlas, HTTP "nose", fly pool |
 | `flyboot-connectome-tool` | Converts FlyWire v783 to `.flyb` with DuckDB |
-| `flyboot-lab` | Phase 0 experiments |
+| `flyboot-lab` | Experiments and a JMH benchmark (`mvn -q -pl flyboot-lab exec:exec`) |
 | `tools/reference` | Reference run of the original model on Brian2 and the comparison |
 
 ## Quick start

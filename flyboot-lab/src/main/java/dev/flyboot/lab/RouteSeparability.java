@@ -1,11 +1,14 @@
 package dev.flyboot.lab;
 
-import dev.flyboot.brain.Connectome;
-import dev.flyboot.brain.LifParams;
-import dev.flyboot.brain.LifSimulation;
-import dev.flyboot.brain.NeuronCatalog;
-import dev.flyboot.brain.Stimulus;
+import dev.flyboot.brain.Brain;
+import dev.flyboot.brain.BrainAtlas;
+import dev.flyboot.brain.BrainPool;
+import dev.flyboot.brain.Hashing;
+import dev.flyboot.brain.HttpNose;
+import dev.flyboot.brain.Odor;
+import dev.flyboot.brain.Perception;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -15,12 +18,9 @@ import java.util.UUID;
 import java.util.stream.IntStream;
 
 /**
- * Prototype of the FlyBoot "nose": HTTP requests are encoded as odors and the brain must tell endpoints apart
- * for path variable values it has never smelled. Training requests and test requests use different values.
- * <p>
- * Encoding: the HTTP method drives one pheromone glomerulus; every path feature (literal segment at a position,
- * shape of a segment - number, uuid, word - and the segment count) is hashed onto two of the remaining
- * glomeruli. The router itself never matches path templates: it only sees the brain's spikes.
+ * Can the fly tell endpoints apart by the smell of requests with path variable values it has never smelled?
+ * Uses the production {@link HttpNose} and {@link BrainPool}; the router never matches path templates, a
+ * nearest-centroid classifier sees only spike counts. Training and test requests use different values.
  * <p>
  * Usage: {@code RouteSeparability [sniffMs] [samplesPerRoute]}.
  */
@@ -31,27 +31,16 @@ public final class RouteSeparability {
             "GET /pets/{id}/photos", "GET /owners", "GET /owners/{id}", "GET /owners/{id}/pets",
             "GET /owners/{id}/pets/{petId}", "GET /vets/{name}", "GET /visits/{uuid}",
     };
-    static final Map<String, String> METHOD_GLOMERULUS = Map.of(
-            "GET", "ORN_DA1", "POST", "ORN_VA1v", "PUT", "ORN_VA1d", "DELETE", "ORN_DL3", "PATCH", "ORN_DC3");
-    static final double FEATURE_HZ = 30;
-    static final double MAX_HZ = 60;
 
-    public static void main(String[] args) {
-        double sniffMs = args.length > 0 ? Double.parseDouble(args[0]) : 50;
+    public static void main(String[] args) throws IOException {
+        double sniffMs = args.length > 0 ? Double.parseDouble(args[0]) : 75;
         int samples = args.length > 1 ? Integer.parseInt(args[1]) : 20;
+        int flies = Runtime.getRuntime().availableProcessors();
+        List<String> readouts = List.of(BrainAtlas.ALPN, BrainAtlas.KC, BrainAtlas.LHN, BrainAtlas.MBON);
 
-        Connectome brain = Lab.connectome();
-        NeuronCatalog catalog = Lab.catalog();
-        Map<String, int[]> glomeruli = catalog.groupByType(n -> n.cellClass().equals("olfactory") && n.type().startsWith("ORN_"));
-        List<String> pathGlomeruli = glomeruli.keySet().stream().filter(t -> !METHOD_GLOMERULUS.containsValue(t)).toList();
+        Brain brain = Brain.load(Lab.DATA);
+        HttpNose nose = new HttpNose(brain.atlas());
 
-        Map<String, int[]> readouts = new LinkedHashMap<>();
-        readouts.put("ALPN", catalog.select(n -> n.cellClass().equals("ALPN")));
-        readouts.put("KC", catalog.select(n -> n.cellClass().equals("Kenyon_Cell")));
-        readouts.put("LHN", catalog.select(n -> n.cellClass().equals("LHLN") || n.cellClass().equals("LHCENT")));
-        readouts.put("ALL", catalog.select(n -> !n.cellClass().equals("olfactory")));
-
-        // requests: first half of samples train, second half test; values never repeat
         SplittableRandom rnd = new SplittableRandom(2026);
         List<String[]> requests = new ArrayList<>();
         for (int r = 0; r < ROUTES.length; r++) {
@@ -59,37 +48,34 @@ public final class RouteSeparability {
                 requests.add(new String[]{Integer.toString(r), Integer.toString(s), instantiate(ROUTES[r], rnd)});
             }
         }
-        System.out.printf("Routes: %d, samples per route: %d, sniff %.0f ms, e.g. %s | %s%n",
-                ROUTES.length, samples, sniffMs, requests.get(samples * 2)[2], requests.get(samples * 2 + 1)[2]);
+        System.out.printf("Routes: %d, samples per route: %d, sniff %.0f ms, %d flies, e.g. %s -> %s%n",
+                ROUTES.length, samples, sniffMs, flies, requests.get(samples * 2)[2],
+                smell(nose, requests.get(samples * 2)[2]));
 
-        LifParams params = LifParams.shiu2024();
-        for (Connectome c : List.of(brain, brain.shuffledTargets(7))) {
-            ThreadLocal<LifSimulation> sims = ThreadLocal.withInitial(() -> new LifSimulation(c, params));
+        for (Brain b : List.of(brain, brain.shuffled(7))) {
+            BrainPool pool = b.pool(flies, sniffMs, readouts);
             List<OdorSeparability.Sample> result = IntStream.range(0, requests.size()).parallel().mapToObj(k -> {
                 String[] req = requests.get(k);
-                double[] rates = encode(req[2], glomeruli, pathGlomeruli);
-                Stimulus.Builder stim = Stimulus.builder();
-                List<int[]> glom = new ArrayList<>(glomeruli.values());
-                for (int gI = 0; gI < glom.size(); gI++) {
-                    stim.addAll(glom.get(gI), rates[gI]);
-                }
-                LifSimulation sim = sims.get();
-                sim.setStimulus(stim.build());
-                sim.reset(req[2].hashCode());
-                long t = System.nanoTime();
-                sim.run(sniffMs);
-                double wall = (System.nanoTime() - t) / 1e6;
-                Map<String, int[]> counts = new LinkedHashMap<>();
-                readouts.forEach((name, idx) -> counts.put(name, IntStream.of(idx).map(sim::spikeCount).toArray()));
-                return new OdorSeparability.Sample(Integer.parseInt(req[0]), Integer.parseInt(req[1]), rates, counts,
-                        sim.totalSpikes(), wall);
+                Odor odor = smell(nose, req[2]);
+                Perception p = pool.sniff(odor, Hashing.hash64(req[2]));
+                double[] input = brain.atlas().glomerulusTypes().stream().mapToDouble(odor::rateHz).toArray();
+                return new OdorSeparability.Sample(Integer.parseInt(req[0]), Integer.parseInt(req[1]), input,
+                        new LinkedHashMap<>(p.counts()), p.totalSpikes(), p.wallMs());
             }).toList();
-            OdorSeparability.report(c.name(), result, ROUTES.length, samples, readouts.keySet());
-            System.out.printf("median wall per sniff (parallel): %.1f ms%n",
+            OdorSeparability.report(b.connectome().name(), result, ROUTES.length, samples, readouts);
+            System.out.printf("median wall per sniff (%d in parallel): %.1f ms%n", flies,
                     result.stream().mapToDouble(OdorSeparability.Sample::wallMs).sorted().toArray()[result.size() / 2]);
         }
-        OdorSeparability.latency(brain, params, new ArrayList<>(glomeruli.values()),
-                encode(requests.get(samples * 3)[2], glomeruli, pathGlomeruli), sniffMs);
+
+        BrainPool single = brain.pool(1, sniffMs, readouts);
+        double[] wall = IntStream.range(0, 30).mapToDouble(i -> single.sniff(smell(nose, requests.get(i * 7)[2]), i).wallMs())
+                .sorted().toArray();
+        System.out.printf("%nSingle fly, one sniff at a time: median %.1f ms, p90 %.1f ms%n", wall[15], wall[27]);
+    }
+
+    static Odor smell(HttpNose nose, String requestLine) {
+        int space = requestLine.indexOf(' ');
+        return nose.smell(requestLine.substring(0, space), requestLine.substring(space + 1));
     }
 
     static String instantiate(String route, SplittableRandom rnd) {
@@ -106,43 +92,5 @@ public final class RouteSeparability {
             sb.append((char) ('a' + rnd.nextInt(26)));
         }
         return sb.toString();
-    }
-
-    /** Request line to firing rate per glomerulus, in the iteration order of {@code glomeruli}. */
-    static double[] encode(String requestLine, Map<String, int[]> glomeruli, List<String> pathGlomeruli) {
-        List<String> types = new ArrayList<>(glomeruli.keySet());
-        double[] rates = new double[types.size()];
-        String method = requestLine.substring(0, requestLine.indexOf(' '));
-        String path = requestLine.substring(requestLine.indexOf(' ') + 1);
-        String methodGlom = METHOD_GLOMERULUS.get(method);
-        if (methodGlom != null) {
-            rates[types.indexOf(methodGlom)] = MAX_HZ;
-        }
-        String[] segments = path.replaceFirst("^/", "").split("/");
-        List<String> features = new ArrayList<>();
-        features.add("len:" + segments.length);
-        for (int i = 0; i < segments.length; i++) {
-            features.add(i + ":shape:" + shape(segments[i]));
-            features.add(i + ":lit:" + segments[i]);
-        }
-        for (String f : features) {
-            int h = f.hashCode() * 0x9E3779B9;
-            for (int k = 0; k < 2; k++) {
-                String glom = pathGlomeruli.get(Math.floorMod(h + k * 0x7F4A7C15, pathGlomeruli.size()));
-                int idx = types.indexOf(glom);
-                rates[idx] = Math.min(MAX_HZ, rates[idx] + FEATURE_HZ);
-            }
-        }
-        return rates;
-    }
-
-    static String shape(String segment) {
-        if (segment.matches("\\d+")) {
-            return "NUM";
-        }
-        if (segment.matches("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")) {
-            return "UUID";
-        }
-        return "WORD";
     }
 }
