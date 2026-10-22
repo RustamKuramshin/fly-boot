@@ -1,8 +1,8 @@
 package dev.flyboot.core.sample.cycle;
 
-import dev.flyboot.core.Component;
+import dev.flyboot.core.FlyComponent;
 
-@Component
+@FlyComponent
 public class B {
     B(A a) {
     }

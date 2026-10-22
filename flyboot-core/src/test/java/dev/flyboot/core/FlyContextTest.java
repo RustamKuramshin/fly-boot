@@ -40,7 +40,7 @@ class FlyContextTest {
         assertSame(context.getBean(PetRepository.class), service.repository());
         assertEquals(42, service.clock().now());
         assertEquals(List.of(service), context.getBeansWithAnnotation(Service.class));
-        assertEquals(2, context.getBeansWithAnnotation(Component.class).size());
+        assertEquals(2, context.getBeansWithAnnotation(FlyComponent.class).size());
     }
 
     @Test
@@ -53,7 +53,7 @@ class FlyContextTest {
 
         FlyContext two = FlyContext.ofPackages("dev.flyboot.core.sample.ambiguous").refresh();
         assertThrows(FlyContextException.class, () -> two.getBean(Greeter.class));
-        assertEquals(Hi.class, two.getBean(Hi.class).getClass(), "the @Autowired constructor is used");
+        assertEquals(Hi.class, two.getBean(Hi.class).getClass(), "the @FlyAutowired constructor is used");
     }
 
     @Test

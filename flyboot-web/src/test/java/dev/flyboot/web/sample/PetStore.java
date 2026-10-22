@@ -1,6 +1,6 @@
 package dev.flyboot.web.sample;
 
-import dev.flyboot.core.Component;
+import dev.flyboot.core.FlyComponent;
 
 import java.util.List;
 import java.util.Map;
@@ -8,7 +8,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicLong;
 
-@Component
+@FlyComponent
 public class PetStore {
     private final Map<Long, Pet> pets = new ConcurrentSkipListMap<>();
     private final AtomicLong ids = new AtomicLong(100);

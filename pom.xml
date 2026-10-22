@@ -126,7 +126,7 @@
                     <artifactId>maven-compiler-plugin</artifactId>
                     <version>3.16.0</version>
                     <configuration>
-                        <!-- parameter names for @PathVariable/@RequestParam without explicit names, as in Spring -->
+                        <!-- parameter names for @FlyPathVariable/@FlyRequestParam without explicit names, as in Spring -->
                         <parameters>true</parameters>
                     </configuration>
                 </plugin>

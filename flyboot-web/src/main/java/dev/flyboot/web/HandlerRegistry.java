@@ -3,18 +3,18 @@ package dev.flyboot.web;
 import com.sun.net.httpserver.HttpExchange;
 import dev.flyboot.brain.learn.RouteTemplate;
 import dev.flyboot.brain.learn.VarKind;
-import dev.flyboot.web.annotation.DeleteMapping;
-import dev.flyboot.web.annotation.GetMapping;
-import dev.flyboot.web.annotation.PatchMapping;
-import dev.flyboot.web.annotation.PathVariable;
-import dev.flyboot.web.annotation.PostMapping;
-import dev.flyboot.web.annotation.PutMapping;
-import dev.flyboot.web.annotation.RequestBody;
-import dev.flyboot.web.annotation.RequestHeader;
-import dev.flyboot.web.annotation.RequestMapping;
+import dev.flyboot.web.annotation.FlyDeleteMapping;
+import dev.flyboot.web.annotation.FlyGetMapping;
+import dev.flyboot.web.annotation.FlyPatchMapping;
+import dev.flyboot.web.annotation.FlyPathVariable;
+import dev.flyboot.web.annotation.FlyPostMapping;
+import dev.flyboot.web.annotation.FlyPutMapping;
+import dev.flyboot.web.annotation.FlyRequestBody;
+import dev.flyboot.web.annotation.FlyRequestHeader;
+import dev.flyboot.web.annotation.FlyRequestMapping;
 import dev.flyboot.web.annotation.RequestMethod;
-import dev.flyboot.web.annotation.RequestParam;
-import dev.flyboot.web.annotation.ResponseStatus;
+import dev.flyboot.web.annotation.FlyRequestParam;
+import dev.flyboot.web.annotation.FlyResponseStatus;
 import dev.flyboot.web.annotation.ValueConstants;
 
 import java.lang.reflect.Method;
@@ -52,7 +52,7 @@ public final class HandlerRegistry {
         Map<String, HandlerMethod> byId = new LinkedHashMap<>();
         for (Object bean : controllers) {
             Class<?> type = bean.getClass();
-            List<String> prefixes = paths(type.getAnnotation(RequestMapping.class));
+            List<String> prefixes = paths(type.getAnnotation(FlyRequestMapping.class));
             Method[] methods = type.getDeclaredMethods();
             Arrays.sort(methods, Comparator.comparing(Method::getName).thenComparing(Method::toGenericString));
             for (Method method : methods) {
@@ -87,22 +87,22 @@ public final class HandlerRegistry {
 
     private static Mapping mappingOf(Method m) {
         List<Mapping> found = new ArrayList<>();
-        if (m.getAnnotation(GetMapping.class) instanceof GetMapping a) {
+        if (m.getAnnotation(FlyGetMapping.class) instanceof FlyGetMapping a) {
             found.add(new Mapping(merge(a.value(), a.path()), List.of(RequestMethod.GET)));
         }
-        if (m.getAnnotation(PostMapping.class) instanceof PostMapping a) {
+        if (m.getAnnotation(FlyPostMapping.class) instanceof FlyPostMapping a) {
             found.add(new Mapping(merge(a.value(), a.path()), List.of(RequestMethod.POST)));
         }
-        if (m.getAnnotation(PutMapping.class) instanceof PutMapping a) {
+        if (m.getAnnotation(FlyPutMapping.class) instanceof FlyPutMapping a) {
             found.add(new Mapping(merge(a.value(), a.path()), List.of(RequestMethod.PUT)));
         }
-        if (m.getAnnotation(DeleteMapping.class) instanceof DeleteMapping a) {
+        if (m.getAnnotation(FlyDeleteMapping.class) instanceof FlyDeleteMapping a) {
             found.add(new Mapping(merge(a.value(), a.path()), List.of(RequestMethod.DELETE)));
         }
-        if (m.getAnnotation(PatchMapping.class) instanceof PatchMapping a) {
+        if (m.getAnnotation(FlyPatchMapping.class) instanceof FlyPatchMapping a) {
             found.add(new Mapping(merge(a.value(), a.path()), List.of(RequestMethod.PATCH)));
         }
-        if (m.getAnnotation(RequestMapping.class) instanceof RequestMapping a) {
+        if (m.getAnnotation(FlyRequestMapping.class) instanceof FlyRequestMapping a) {
             found.add(new Mapping(merge(a.value(), a.path()), a.method().length == 0 ? STANDARD : List.of(a.method())));
         }
         if (found.size() > 1) {
@@ -111,7 +111,7 @@ public final class HandlerRegistry {
         return found.isEmpty() ? null : found.getFirst();
     }
 
-    private static List<String> paths(RequestMapping classMapping) {
+    private static List<String> paths(FlyRequestMapping classMapping) {
         return classMapping == null ? List.of("") : merge(classMapping.value(), classMapping.path());
     }
 
@@ -155,7 +155,7 @@ public final class HandlerRegistry {
         for (Parameter p : method.getParameters()) {
             params.add(binding(method, p, pattern, patternVars, kinds));
         }
-        ResponseStatus rs = method.getAnnotation(ResponseStatus.class);
+        FlyResponseStatus rs = method.getAnnotation(FlyResponseStatus.class);
         return new HandlerMethod(bean, method, new RouteTemplate(httpMethod, pattern, kinds), List.copyOf(params),
                 rs == null ? 200 : rs.value(), List.copyOf(varSegments));
     }
@@ -163,23 +163,23 @@ public final class HandlerRegistry {
     private static ParamBinding binding(Method method, Parameter p, String pattern, List<String> patternVars,
                                         Map<String, VarKind> kinds) {
         Class<?> type = p.getType();
-        if (p.getAnnotation(PathVariable.class) instanceof PathVariable a) {
+        if (p.getAnnotation(FlyPathVariable.class) instanceof FlyPathVariable a) {
             String name = name(a.value(), a.name(), p, method);
             if (!patternVars.contains(name)) {
-                throw new FlyWebException(where(method) + ": @PathVariable " + name + " is not in " + pattern);
+                throw new FlyWebException(where(method) + ": @FlyPathVariable " + name + " is not in " + pattern);
             }
             requireConvertible(method, p, type);
             kinds.put(name, kindOf(type));
             return new ParamBinding.PathVar(name, type);
         }
-        if (p.getAnnotation(RequestParam.class) instanceof RequestParam a) {
+        if (p.getAnnotation(FlyRequestParam.class) instanceof FlyRequestParam a) {
             return queryParam(method, p, name(a.value(), a.name(), p, method), a.required(), a.defaultValue());
         }
-        if (p.getAnnotation(RequestHeader.class) instanceof RequestHeader a) {
+        if (p.getAnnotation(FlyRequestHeader.class) instanceof FlyRequestHeader a) {
             requireConvertible(method, p, type);
             return new ParamBinding.Header(name(a.value(), a.name(), p, method), type, a.required(), a.defaultValue());
         }
-        if (p.getAnnotation(RequestBody.class) instanceof RequestBody a) {
+        if (p.getAnnotation(FlyRequestBody.class) instanceof FlyRequestBody a) {
             return new ParamBinding.Body(p.getParameterizedType(), a.required());
         }
         if (type == HttpExchange.class) {
@@ -189,7 +189,7 @@ public final class HandlerRegistry {
             return queryParam(method, p, name("", "", p, method), false, ValueConstants.NONE);
         }
         throw new FlyWebException(where(method) + ": parameter " + p.getName() + " of type " + type.getSimpleName()
-                + " needs @PathVariable, @RequestParam, @RequestHeader or @RequestBody");
+                + " needs @FlyPathVariable, @FlyRequestParam, @FlyRequestHeader or @FlyRequestBody");
     }
 
     private static ParamBinding queryParam(Method method, Parameter p, String name, boolean required, String defaultValue) {

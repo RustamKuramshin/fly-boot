@@ -31,12 +31,12 @@ public final class FlyContext {
     private final Deque<Class<?>> creating = new ArrayDeque<>();
     private boolean refreshed;
 
-    /** Finds classes annotated with {@link Component}, directly or through a meta-annotation, in the packages. */
+    /** Finds classes annotated with {@link FlyComponent}, directly or through a meta-annotation, in the packages. */
     public static List<Class<?>> scan(ClassLoader loader, String... packages) {
         try (ScanResult result = new ClassGraph().enableClassInfo().enableAnnotationInfo()
                 .overrideClassLoaders(loader).acceptPackages(packages).scan()) {
             List<Class<?>> classes = new ArrayList<>();
-            for (ClassInfo info : result.getClassesWithAnnotation(Component.class)) {
+            for (ClassInfo info : result.getClassesWithAnnotation(FlyComponent.class)) {
                 if (!info.isAnnotation() && !info.isInterface() && !info.isAbstract()) {
                     classes.add(info.loadClass());
                 }
@@ -174,18 +174,18 @@ public final class FlyContext {
             throw new FlyContextException(type.getName() + " is abstract and cannot be a component");
         }
         Constructor<?>[] all = type.getDeclaredConstructors();
-        List<Constructor<?>> marked = Arrays.stream(all).filter(c -> c.isAnnotationPresent(Autowired.class)).toList();
+        List<Constructor<?>> marked = Arrays.stream(all).filter(c -> c.isAnnotationPresent(FlyAutowired.class)).toList();
         if (marked.size() == 1) {
             return marked.getFirst();
         }
         if (marked.size() > 1) {
-            throw new FlyContextException(type.getName() + " has several @Autowired constructors");
+            throw new FlyContextException(type.getName() + " has several @FlyAutowired constructors");
         }
         if (all.length == 1) {
             return all[0];
         }
         return Arrays.stream(all).filter(c -> c.getParameterCount() == 0).findFirst().orElseThrow(() ->
-                new FlyContextException(type.getName() + " has several constructors; mark one with @Autowired"));
+                new FlyContextException(type.getName() + " has several constructors; mark one with @FlyAutowired"));
     }
 
     private void checkOpen() {

@@ -10,5 +10,5 @@ import java.lang.annotation.Target;
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.CONSTRUCTOR)
-public @interface Autowired {
+public @interface FlyAutowired {
 }

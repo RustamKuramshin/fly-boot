@@ -6,14 +6,13 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-/** Shortcut for {@code @RequestMapping(method = RequestMethod.PUT)}. */
+/** Binds a parameter to a variable of the path pattern; the name defaults to the parameter name. */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
-@Target(ElementType.METHOD)
-public @interface PutMapping {
+@Target(ElementType.PARAMETER)
+public @interface FlyPathVariable {
 
-    /** Path patterns such as {@code /pets/{id}}; alias of {@link #path()}. */
-    String[] value() default {};
+    String value() default "";
 
-    String[] path() default {};
+    String name() default "";
 }

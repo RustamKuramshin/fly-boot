@@ -1,10 +1,10 @@
 package dev.flyboot.web;
 
 import dev.flyboot.brain.learn.VarKind;
-import dev.flyboot.web.annotation.GetMapping;
-import dev.flyboot.web.annotation.PathVariable;
-import dev.flyboot.web.annotation.PostMapping;
-import dev.flyboot.web.annotation.RestController;
+import dev.flyboot.web.annotation.FlyGetMapping;
+import dev.flyboot.web.annotation.FlyPathVariable;
+import dev.flyboot.web.annotation.FlyPostMapping;
+import dev.flyboot.web.annotation.FlyController;
 import dev.flyboot.web.sample.EchoController;
 import dev.flyboot.web.sample.PetController;
 import dev.flyboot.web.sample.PetStore;
@@ -37,35 +37,35 @@ class HandlerRegistryTest {
         assertTrue(echo.segments().getFirst().pattern().matcher("hello.json").matches());
     }
 
-    @RestController
+    @FlyController
     static class Duplicate {
-        @GetMapping("/x")
+        @FlyGetMapping("/x")
         void a() {
         }
 
-        @GetMapping("x/")
+        @FlyGetMapping("x/")
         void b() {
         }
     }
 
-    @RestController
+    @FlyController
     static class UnknownVariable {
-        @GetMapping("/x/{id}")
-        void a(@PathVariable long pid) {
+        @FlyGetMapping("/x/{id}")
+        void a(@FlyPathVariable long pid) {
         }
     }
 
-    @RestController
+    @FlyController
     static class UnconvertibleParam {
-        @GetMapping("/x")
+        @FlyGetMapping("/x")
         void a(Thread thread) {
         }
     }
 
-    @RestController
+    @FlyController
     static class TwoMappings {
-        @GetMapping("/x")
-        @PostMapping("/x")
+        @FlyGetMapping("/x")
+        @FlyPostMapping("/x")
         void a() {
         }
     }
@@ -77,7 +77,7 @@ class HandlerRegistryTest {
         assertTrue(assertThrows(FlyWebException.class, () -> HandlerRegistry.collect(List.of(new UnknownVariable())))
                 .getMessage().contains("pid is not in /x/{id}"));
         assertTrue(assertThrows(FlyWebException.class, () -> HandlerRegistry.collect(List.of(new UnconvertibleParam())))
-                .getMessage().contains("needs @PathVariable"));
+                .getMessage().contains("needs @FlyPathVariable"));
         assertTrue(assertThrows(FlyWebException.class, () -> HandlerRegistry.collect(List.of(new TwoMappings())))
                 .getMessage().contains("several mapping annotations"));
     }

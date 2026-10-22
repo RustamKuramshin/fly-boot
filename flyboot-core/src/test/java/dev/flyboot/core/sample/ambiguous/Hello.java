@@ -1,7 +1,7 @@
 package dev.flyboot.core.sample.ambiguous;
 
-import dev.flyboot.core.Component;
+import dev.flyboot.core.FlyComponent;
 
-@Component
+@FlyComponent
 public class Hello implements Greeter {
 }

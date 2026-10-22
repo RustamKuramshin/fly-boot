@@ -6,11 +6,14 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-/** Status of a successful response of the handler, e.g. {@code @ResponseStatus(201)}. */
+/** Shortcut for {@code @FlyRequestMapping(method = RequestMethod.DELETE)}. */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
-public @interface ResponseStatus {
+public @interface FlyDeleteMapping {
 
-    int value();
+    /** Path patterns such as {@code /pets/{id}}; alias of {@link #path()}. */
+    String[] value() default {};
+
+    String[] path() default {};
 }

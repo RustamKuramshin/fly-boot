@@ -1,8 +1,8 @@
 package dev.flyboot.core.sample;
 
-import dev.flyboot.core.Component;
+import dev.flyboot.core.FlyComponent;
 
-@Component
+@FlyComponent
 public class PetRepository {
     public String find(long id) {
         return "pet-" + id;

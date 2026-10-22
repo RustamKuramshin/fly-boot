@@ -10,11 +10,11 @@ public class FlyClinicApplication {
     }
 }
 
-@RestController
-@RequestMapping("/keepers")
+@FlyController
+@FlyRequestMapping("/keepers")
 public class KeeperController {
-    @GetMapping("/{id}")
-    public Keeper get(@PathVariable long id) { ... }
+    @FlyGetMapping("/{id}")
+    public Keeper get(@FlyPathVariable long id) { ... }
 }
 ```
 
@@ -30,7 +30,7 @@ X-Fly-Sniff-Ms: 75.0
 
 ## How it works
 
-1. On startup the framework finds the controllers and their `@GetMapping`, `@PostMapping` and so on.
+1. On startup the framework finds the controllers and their `@FlyGetMapping`, `@FlyPostMapping` and so on.
 2. The fly "sniffs" synthetic requests to every endpoint and decoys that match none of them. A dopamine prediction error tunes the synapses from Kenyon cells and projection neurons onto route neurons. The result is cached in `.flyboot/`.
 3. Every request becomes an odor: the method excites a pheromone glomerulus, path features excite ordinary glomeruli. Then 75 ms of brain activity are simulated with the Shiu et al. 2024 model, validated against the original Brian2 code.
 4. The most confident route neuron wins. If it is the "unknown odor" neuron, the answer is 404. The dispatcher never matches path templates: it only carries out the fly's decision.
@@ -88,8 +88,8 @@ sdk install tornadovm 7.0.1-jdk22plus-metal
 | Module | What is inside |
 |---|---|
 | `flyboot-brain` | Connectome, LIF engine (a port of Shiu et al. 2024, validated against Brian2), population atlas, HTTP "nose", fly pool, route learning (`FlyRouter`) |
-| `flyboot-core` | `@Component`, `@FlyBootApplication`, package scanning, constructor injection |
-| `flyboot-web` | `@RestController`, `@GetMapping`..., `@PathVariable`, `@RequestParam`, `@RequestBody`, `ResponseEntity`; HTTP server and a dispatcher where the fly picks the route |
+| `flyboot-core` | `@FlyComponent`, `@FlyBootApplication`, package scanning, constructor injection |
+| `flyboot-web` | `@FlyController`, `@FlyGetMapping`..., `@FlyPathVariable`, `@FlyRequestParam`, `@FlyRequestBody`, `ResponseEntity`; HTTP server and a dispatcher where the fly picks the route |
 | `flyboot-starter` | `FlyApplication.run`, `application.properties`, banner, `/actuator/*`, the `/actuator/brain/ui` page |
 | `flyboot-tornado` | Optional GPU engine on TornadoVM; harmless on a plain JVM |
 | `flyboot-connectome-tool` | Converts FlyWire v783 (DuckDB) and MaleCNS v1.0 (Apache Arrow) to `.flyb` |

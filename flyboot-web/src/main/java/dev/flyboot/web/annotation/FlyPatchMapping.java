@@ -6,11 +6,11 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-/** Shortcut for {@code @RequestMapping(method = RequestMethod.POST)}. */
+/** Shortcut for {@code @FlyRequestMapping(method = RequestMethod.PATCH)}. */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
-public @interface PostMapping {
+public @interface FlyPatchMapping {
 
     /** Path patterns such as {@code /pets/{id}}; alias of {@link #path()}. */
     String[] value() default {};

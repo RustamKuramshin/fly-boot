@@ -6,11 +6,17 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-/** Binds a parameter to the request body: JSON for objects, the raw text for {@code String}, bytes for {@code byte[]}. */
+/** Binds a parameter to a request header (case-insensitive). */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.PARAMETER)
-public @interface RequestBody {
+public @interface FlyRequestHeader {
+
+    String value() default "";
+
+    String name() default "";
 
     boolean required() default true;
+
+    String defaultValue() default ValueConstants.NONE;
 }

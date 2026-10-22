@@ -1,14 +1,14 @@
 package dev.flyboot.core.sample.ambiguous;
 
-import dev.flyboot.core.Autowired;
-import dev.flyboot.core.Component;
+import dev.flyboot.core.FlyAutowired;
+import dev.flyboot.core.FlyComponent;
 
-@Component
+@FlyComponent
 public class Hi implements Greeter {
     public Hi() {
     }
 
-    @Autowired
+    @FlyAutowired
     public Hi(Hello hello) {
     }
 }

@@ -13,7 +13,7 @@ import java.lang.annotation.Target;
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.TYPE, ElementType.METHOD})
-public @interface RequestMapping {
+public @interface FlyRequestMapping {
 
     /** Path patterns such as {@code /pets/{id}}; alias of {@link #path()}. */
     String[] value() default {};

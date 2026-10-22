@@ -8,10 +8,10 @@ import java.lang.annotation.Target;
 
 /**
  * A class the context creates once and injects wherever it is needed. Works as a meta-annotation too:
- * any annotation annotated with {@code @Component} (like {@code @RestController}) marks components.
+ * any annotation annotated with {@code @FlyComponent} (like {@code @FlyController}) marks components.
  */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)
-public @interface Component {
+public @interface FlyComponent {
 }

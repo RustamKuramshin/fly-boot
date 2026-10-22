@@ -5,10 +5,10 @@ import dev.flyboot.brain.learn.FlyRouter;
 import dev.flyboot.web.FlyDispatcher;
 import dev.flyboot.web.FlyRuntime;
 import dev.flyboot.web.HandlerMethod;
-import dev.flyboot.web.annotation.GetMapping;
-import dev.flyboot.web.annotation.RequestMapping;
-import dev.flyboot.web.annotation.RequestParam;
-import dev.flyboot.web.annotation.RestController;
+import dev.flyboot.web.annotation.FlyGetMapping;
+import dev.flyboot.web.annotation.FlyRequestMapping;
+import dev.flyboot.web.annotation.FlyRequestParam;
+import dev.flyboot.web.annotation.FlyController;
 
 import dev.flyboot.brain.BrainAtlas;
 import dev.flyboot.brain.NeuronPositions;
@@ -28,8 +28,8 @@ import java.util.Map;
 /**
  * What the fly is and how it is doing. These endpoints are learned and routed by the fly like any other.
  */
-@RestController
-@RequestMapping("/actuator")
+@FlyController
+@FlyRequestMapping("/actuator")
 public class BrainActuator {
 
     /** Neuron groups drawn in their own colour; everything else is "other". */
@@ -42,7 +42,7 @@ public class BrainActuator {
         this.runtime = runtime;
     }
 
-    @GetMapping("/health")
+    @FlyGetMapping("/health")
     public Map<String, Object> health() {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("status", runtime.started() ? "UP" : "STARTING");
@@ -50,8 +50,8 @@ public class BrainActuator {
         return m;
     }
 
-    @GetMapping("/brain")
-    public Map<String, Object> brain(@RequestParam(defaultValue = "10") int recent) {
+    @FlyGetMapping("/brain")
+    public Map<String, Object> brain(@FlyRequestParam(defaultValue = "10") int recent) {
         Brain brain = runtime.brain();
         FlyRouter router = runtime.router();
         FlyDispatcher dispatcher = runtime.dispatcher();
@@ -101,7 +101,7 @@ public class BrainActuator {
     }
 
     /** The page that shows the fly sniffing a request: open it in a browser. */
-    @GetMapping("/brain/ui")
+    @FlyGetMapping("/brain/ui")
     public ResponseEntity<byte[]> ui() throws IOException {
         try (InputStream in = BrainActuator.class.getResourceAsStream("/flyboot/brain-ui.html")) {
             if (in == null) {
@@ -115,7 +115,7 @@ public class BrainActuator {
      * Where every neuron is drawn: a front view of the brain scaled to 1000 px wide, -1 for neurons without a
      * known position, and the group of every neuron as an index into {@code groups}.
      */
-    @GetMapping("/brain/layout")
+    @FlyGetMapping("/brain/layout")
     public Map<String, Object> layout() {
         Map<String, Object> l = layout;
         if (l == null) {
@@ -126,8 +126,8 @@ public class BrainActuator {
     }
 
     /** Sniffs the request with every spike recorded, without routing or learning from it. */
-    @GetMapping("/brain/sniff")
-    public Map<String, Object> sniff(@RequestParam(defaultValue = "GET") String method, @RequestParam String path) {
+    @FlyGetMapping("/brain/sniff")
+    public Map<String, Object> sniff(@FlyRequestParam(defaultValue = "GET") String method, @FlyRequestParam String path) {
         FlyRouter router = runtime.router();
         FlyRouter.Explanation e = router.explain(method, path);
         FlyRouter.Routing r = e.routing();
@@ -209,7 +209,7 @@ public class BrainActuator {
         return m;
     }
 
-    @GetMapping("/routes")
+    @FlyGetMapping("/routes")
     public List<Map<String, String>> routes() {
         return runtime.dispatcher().handlers().stream().map(BrainActuator::describe).toList();
     }

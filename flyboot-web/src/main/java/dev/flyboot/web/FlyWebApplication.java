@@ -4,7 +4,7 @@ import dev.flyboot.brain.Brain;
 import dev.flyboot.brain.learn.FlyRouter;
 import dev.flyboot.brain.learn.RouteTemplate;
 import dev.flyboot.core.FlyContext;
-import dev.flyboot.web.annotation.RestController;
+import dev.flyboot.web.annotation.FlyController;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.io.IOException;
@@ -147,9 +147,9 @@ public final class FlyWebApplication implements AutoCloseable {
             context.registerSingleton(json);
             context.refresh();
 
-            List<HandlerMethod> handlers = HandlerRegistry.collect(context.getBeansWithAnnotation(RestController.class));
+            List<HandlerMethod> handlers = HandlerRegistry.collect(context.getBeansWithAnnotation(FlyController.class));
             if (handlers.isEmpty()) {
-                throw new FlyWebException("No handler methods found in @RestController classes of " + packages);
+                throw new FlyWebException("No handler methods found in @FlyController classes of " + packages);
             }
             handlers.forEach(h -> log.accept("Mapped " + h.template().id() + " -> " + h.describe()));
             List<RouteTemplate> templates = handlers.stream().map(HandlerMethod::template).toList();
