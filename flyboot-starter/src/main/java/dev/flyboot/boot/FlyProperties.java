@@ -18,39 +18,55 @@ import java.util.TreeMap;
  */
 public final class FlyProperties {
 
-    private final Map<String, String> values;
+    /** From {@code application.properties}: the lowest precedence. */
+    private final Map<String, String> file;
     private final Map<String, String> environment;
+    /** System properties and command-line arguments: above the environment. */
+    private final Map<String, String> overrides;
 
-    FlyProperties(Map<String, String> values, Map<String, String> environment) {
-        this.values = new TreeMap<>(values);
+    FlyProperties(Map<String, String> file, Map<String, String> environment, Map<String, String> overrides) {
+        this.file = new TreeMap<>(file);
         this.environment = Map.copyOf(environment);
+        this.overrides = new TreeMap<>(overrides);
+    }
+
+    /** Explicit values above the environment, as if given with {@code -D} or {@code --key=value}. */
+    FlyProperties(Map<String, String> overrides, Map<String, String> environment) {
+        this(Map.of(), environment, overrides);
     }
 
     public static FlyProperties load(ClassLoader loader, String[] args) {
-        Map<String, String> values = new TreeMap<>();
+        Map<String, String> fileValues = new TreeMap<>();
         try (InputStream in = loader.getResourceAsStream("application.properties")) {
             if (in != null) {
                 Properties file = new Properties();
                 file.load(new InputStreamReader(in, StandardCharsets.UTF_8));
-                file.stringPropertyNames().forEach(k -> values.put(k, file.getProperty(k).trim()));
+                file.stringPropertyNames().forEach(k -> fileValues.put(k, file.getProperty(k).trim()));
             }
         } catch (IOException e) {
             throw new UncheckedIOException("Cannot read application.properties", e);
         }
-        System.getProperties().stringPropertyNames().forEach(k -> values.put(k, System.getProperty(k)));
+        Map<String, String> overrides = new TreeMap<>();
+        System.getProperties().stringPropertyNames().forEach(k -> overrides.put(k, System.getProperty(k)));
         for (String arg : args) {
             if (arg.startsWith("--") && arg.indexOf('=') > 2) {
-                values.put(arg.substring(2, arg.indexOf('=')), arg.substring(arg.indexOf('=') + 1));
+                overrides.put(arg.substring(2, arg.indexOf('=')), arg.substring(arg.indexOf('=') + 1));
             }
         }
-        return new FlyProperties(values, System.getenv());
+        return new FlyProperties(fileValues, System.getenv(), overrides);
     }
 
-    /** Value of the key; an environment variable is used when the key is set nowhere else. */
+    /**
+     * Value of the key: a system property or argument, else the environment variable ({@code server.port} is
+     * {@code SERVER_PORT}), else {@code application.properties}, else the default. Blank counts as unset.
+     */
     public String get(String key, String defaultValue) {
-        String v = values.get(key);
-        if (v == null) {
+        String v = overrides.get(key);
+        if (v == null || v.isBlank()) {
             v = environment.get(key.toUpperCase(Locale.ROOT).replace('.', '_').replace('-', '_'));
+        }
+        if (v == null || v.isBlank()) {
+            v = file.get(key);
         }
         return v == null || v.isBlank() ? defaultValue : v.trim();
     }

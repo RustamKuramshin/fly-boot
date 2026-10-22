@@ -26,6 +26,18 @@ class FlyPropertiesTest {
     }
 
     @Test
+    void environmentBeatsTheFileAndExplicitValuesBeatTheEnvironment() {
+        Map<String, String> file = Map.of("server.port", "8080", "flyboot.brain.data-dir", "../flyboot/data",
+                "flyboot.brain.name", "flywire-783");
+        Map<String, String> env = Map.of("FLYBOOT_BRAIN_DATA_DIR", "/brains", "SERVER_PORT", "9000");
+        FlyProperties p = new FlyProperties(file, env, Map.of("server.port", "7070"));
+        assertEquals("/brains", p.get("flyboot.brain.data-dir", "data"), "environment over application.properties");
+        assertEquals(7070, p.getInt("server.port", 1), "-D and --key=value over the environment");
+        assertEquals("flywire-783", p.get("flyboot.brain.name", "x"), "the file when nothing overrides it");
+        assertEquals("fallback", p.get("flyboot.router.sniff-ms", "fallback"));
+    }
+
+    @Test
     void commandLineBeatsTheFileAndBadValuesNameTheProperty() {
         FlyProperties p = FlyProperties.load(getClass().getClassLoader(),
                 new String[]{"--server.port=7070", "positional", "--flyboot.router.min-belief=0.5"});
