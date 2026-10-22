@@ -31,7 +31,7 @@ import java.util.Locale;
  *       {@code malecns-v1} (male brain and nerve cord, MaleCNS); any {@code <name>.flyb} in the data directory</li>
  *   <li>{@code flyboot.brain.w-syn} - weight of one synapse in mV; default from {@code <name>.brain.properties}</li>
  *   <li>{@code flyboot.brain.engine=cpu} - {@code tornado} simulates on the GPU; needs flyboot-tornado on the
- *       classpath and the TornadoVM launcher ({@code scripts/run-demo.sh --tornado})</li>
+ *       classpath and the JVM started with {@code @$TORNADOVM_HOME/tornado-argfile}</li>
  *   <li>{@code flyboot.brain.control=none} - {@code shuffled} rewires the brain randomly, to see what the wiring is worth</li>
  *   <li>{@code flyboot.brain.cache-dir=.flyboot}, {@code none} disables the synapse cache</li>
  *   <li>{@code flyboot.router.sniff-ms=75}, {@code flyboot.router.flies=0} (one per processor),

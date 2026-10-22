@@ -42,7 +42,7 @@ Accuracy on unseen path variable values is 96-100%, about 70-80% of requests to 
 ## Features
 
 - **Two brains:** `--flyboot.brain.name=flywire-783` (female, brain, 139k neurons) or `malecns-v1` (male, brain and ventral nerve cord, 167k neurons).
-- **Two engines:** a plain JVM on the CPU or TornadoVM on the GPU (`./scripts/run-demo.sh --tornado`), a sniff is 4-5x faster.
+- **Two engines:** a plain JVM on the CPU or TornadoVM on the GPU (`--flyboot.brain.engine=tornado`), a sniff is 4-5x faster.
 - **Online learning:** `--flyboot.learning.online.enabled=true`. 2xx is a reward, 5xx and 405 are a punishment.
 - **Brain in the browser:** `http://localhost:8080/actuator/brain/ui` shows how a request lights up the neurons and which route neuron wins.
 - **Actuator:** `/actuator/health`, `/actuator/brain`, `/actuator/routes`.
@@ -50,17 +50,11 @@ Accuracy on unseen path variable values is 96-100%, about 70-80% of requests to 
 
 ## Quick start
 
-You need JDK 25 (`.java-version` for jenv) and Maven.
+You need JDK 25 (`.java-version` for jenv) and Maven. Download the data, install the framework into the local Maven repository and convert the brain:
 
 ```bash
 ./scripts/download-data.sh && mvn install && mvn -q -pl flyboot-connectome-tool exec:java
 ```
-
-```bash
-./scripts/run-demo.sh --server.port=8080
-```
-
-Then open `http://localhost:8080/actuator/brain/ui` in a browser.
 
 The male brain (about 560 MB):
 
@@ -68,18 +62,36 @@ The male brain (about 560 MB):
 ./scripts/download-data.sh --malecns && mvn -q -pl flyboot-connectome-tool exec:exec@malecns
 ```
 
-```bash
-./scripts/run-demo.sh --flyboot.brain.name=malecns-v1
-```
-
-GPU (Apple Silicon, Metal):
+The GPU engine (Apple Silicon, Metal) needs TornadoVM:
 
 ```bash
 sdk install tornadovm 7.0.1-jdk22plus-metal
 ```
 
-```bash
-./scripts/run-demo.sh --tornado
+## An application on FlyBoot
+
+An application uses FlyBoot the way applications use Spring Boot. The parent `pom` sets versions, Java 25 and the `-parameters` flag that `@FlyPathVariable` names rely on; the dependency itself is the starter:
+
+```xml
+<parent>
+    <groupId>dev.flyboot</groupId>
+    <artifactId>flyboot-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <relativePath/>
+</parent>
+
+<dependencies>
+    <dependency>
+        <groupId>dev.flyboot</groupId>
+        <artifactId>flyboot-starter</artifactId>
+    </dependency>
+    <!-- optional: the GPU engine, works only under TornadoVM -->
+    <dependency>
+        <groupId>dev.flyboot</groupId>
+        <artifactId>flyboot-tornado</artifactId>
+        <scope>runtime</scope>
+    </dependency>
+</dependencies>
 ```
 
 
