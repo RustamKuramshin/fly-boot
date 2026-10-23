@@ -34,6 +34,8 @@ X-Fly-Sniff-Ms: 75.0
 
 The request is turned into an odor, the fly sniffs it for 75 ms of brain time, and the most confident route neuron picks the handler. The fly gets it wrong about 3-5% of the time, and you can see that in the response headers.
 
+To see FlyBoot in a real application, try [fly-boot-clinic](https://github.com/RustamKuramshin/fly-boot-clinic): a clinic for fruit flies with keepers, patients, entomologists and visits, 23 endpoints routed by the fly, a start script for a plain JVM and TornadoVM, and an end-to-end test on the real brain.
+
 ![Spikes of one sniff in the male fly brain](assets/malecns-keepers-flies.jpg)
 
 ## Numbers
@@ -47,7 +49,7 @@ The request is turned into an odor, the fly sniffs it for 75 ms of brain time, a
 | One 75 ms sniff on GPU (Apple M5 Max, Metal) | 22 ms | 25 ms |
 | First training of 20-23 endpoints | 15-20 s | 16-30 s |
 
-A restart with synapses from the cache takes about a second. Accuracy depends on the route set: 96.5-98.5% on 20 PetClinic-like endpoints, 94.8% on CPU and 97% on GPU for a 23-endpoint clinic for fruit flies.
+A restart with synapses from the cache takes about a second. Accuracy depends on the route set: 96.5-98.5% on 20 PetClinic-like endpoints, 94.8% on CPU and 97% on GPU for the 23 endpoints of [fly-boot-clinic](https://github.com/RustamKuramshin/fly-boot-clinic).
 
 The number that matters most is the control. Shuffle the brain's wiring while keeping node degrees and synapse signs (`--flyboot.brain.control=shuffled`), and the same training procedure reaches only 22-24%. So the routing really comes from the fly's wiring, not from a trainable layer bolted onto a random network.
 
@@ -156,6 +158,8 @@ An application uses FlyBoot the way applications use Spring Boot. The parent `po
     </dependency>
 </dependencies>
 ```
+
+A complete example is [fly-boot-clinic](https://github.com/RustamKuramshin/fly-boot-clinic). Clone this repository into a `flyboot` directory next to it, because the clinic reads the converted brain from `../flyboot/data` by default.
 
 ## Properties
 
