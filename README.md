@@ -1,6 +1,6 @@
 # FlyBoot
 
-![A simulated fruit fly brain routing HTTP requests: GET /keepers/1 lights up the FlyWire connectome and wins GET /keepers/{id}, GET /admin ends as an unknown smell, 404](assets/fruit-fly-brain-http-routing.gif)
+![A simulated fruit fly brain routing HTTP requests: GET /keepers/1 lights up the FlyWire connectome and wins GET /keepers/{id}, GET /cats/7 is also sent to GET /keepers/{id}, GET /admin ends as an unknown smell, 404](assets/fruit-fly-brain-http-routing.gif)
 
 **A Spring Boot-style Java web framework whose HTTP router is a simulated fruit fly brain.** Request routing is done by a spiking simulation of the *Drosophila melanogaster* brain built from the real FlyWire connectome: 138,639 neurons and 15 million connections. No regex, no route table, no path template matching. The fly smells the request and decides which controller method answers it.
 
