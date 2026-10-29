@@ -35,7 +35,7 @@ import java.util.regex.Matcher;
  */
 public final class FlyDispatcher implements HttpHandler {
 
-    private static final System.Logger LOG = System.getLogger("dev.flyboot.web");
+    private static final System.Logger LOG = System.getLogger(FlyDispatcher.class.getName());
 
     private final List<HandlerMethod> handlers;
     private final RouteOracle oracle;

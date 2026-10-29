@@ -20,6 +20,8 @@ import java.util.function.Consumer;
  */
 public final class FlyWebApplication implements AutoCloseable {
 
+    private static final System.Logger LOG = System.getLogger(FlyWebApplication.class.getName());
+
     private final FlyContext context;
     private final FlyRouter router;
     private final FlyDispatcher dispatcher;
@@ -71,7 +73,7 @@ public final class FlyWebApplication implements AutoCloseable {
         private String host = "0.0.0.0";
         private int port = 8080;
         private JsonMapper json = JsonMapper.builder().build();
-        private Consumer<String> log = System.out::println;
+        private Consumer<String> log = message -> LOG.log(System.Logger.Level.INFO, message);
         private boolean onlineLearning;
         private double onlineRate = 0.5;
 
@@ -129,6 +131,7 @@ public final class FlyWebApplication implements AutoCloseable {
             return this;
         }
 
+        /** Where startup and learning messages go; by default the {@code dev.flyboot.web.FlyWebApplication} logger at INFO. */
         public Builder log(Consumer<String> value) {
             log = value;
             return this;

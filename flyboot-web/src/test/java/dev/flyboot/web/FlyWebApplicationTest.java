@@ -3,6 +3,7 @@ package dev.flyboot.web;
 import dev.flyboot.brain.Brain;
 import dev.flyboot.brain.learn.FlyRouter;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestReporter;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.net.URI;
@@ -47,7 +48,7 @@ class FlyWebApplicationTest {
             new Probe("POST", "/any", "POST /any"));
 
     @Test
-    void theFlyRoutesRealHttpRequests(@TempDir Path cache) throws Exception {
+    void theFlyRoutesRealHttpRequests(@TempDir Path cache, TestReporter reporter) throws Exception {
         Path data = Path.of(System.getProperty("flyboot.data", "../data"));
         assumeTrue(Files.exists(data.resolve(Brain.DEFAULT_NAME + ".flyb")), "no brain data");
         List<String> log = new ArrayList<>();
@@ -77,7 +78,7 @@ class FlyWebApplicationTest {
                     misses.add(p.method() + " " + p.path() + " -> " + route + " (" + r.statusCode() + ")");
                 }
             }
-            System.out.println("Fly routed " + correct + "/" + PROBES.size() + " correctly; misses: " + misses);
+            reporter.publishEntry("routing", "Fly routed " + correct + "/" + PROBES.size() + " correctly; misses: " + misses);
             assertTrue(correct >= 17, "correct " + correct + "/" + PROBES.size() + ", misses: " + misses);
             assertEquals(PROBES.size(), app.dispatcher().requests());
         }

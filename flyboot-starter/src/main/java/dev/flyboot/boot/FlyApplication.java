@@ -49,7 +49,7 @@ public final class FlyApplication {
 
     public static final String VERSION = "0.1.0-SNAPSHOT";
 
-    private static final System.Logger LOG = System.getLogger("dev.flyboot");
+    private static final System.Logger LOG = System.getLogger(FlyApplication.class.getName());
 
     private FlyApplication() {
     }
@@ -78,8 +78,7 @@ public final class FlyApplication {
                 .host(props.get("server.host", "0.0.0.0"))
                 .port(props.getInt("server.port", 8080))
                 .onlineLearning(props.getBoolean("flyboot.learning.online.enabled", false),
-                        props.getDouble("flyboot.learning.online.rate", 0.5))
-                .log(message -> LOG.log(System.Logger.Level.INFO, message));
+                        props.getDouble("flyboot.learning.online.rate", 0.5));
         dev.flyboot.brain.SimulationEngine engine = dev.flyboot.brain.SimulationEngine.byName(
                 props.get("flyboot.brain.engine", dev.flyboot.brain.SimulationEngine.CPU));
         LOG.log(System.Logger.Level.INFO, "Simulation engine: " + engine.name() + " (" + engine.device() + ")");
