@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -14,6 +15,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * perception, whichever fly handles it.
  */
 public final class BrainPool {
+
+    /** How often a caller waiting for a fly checks whether a place freed up after a fly failed to grow. */
+    private static final long GROW_RETRY_MS = 50;
 
     private final Brain brain;
     private final int size;
@@ -99,23 +103,37 @@ public final class BrainPool {
         }
     }
 
+    /**
+     * An idle fly, a newly grown one while the pool is below its size, or the next fly returned. A fly that failed
+     * to grow gives its place back, and waiting callers look at the size again now and then so they can take it.
+     */
     private FlySimulation borrow() {
-        FlySimulation fly = idle.poll();
-        if (fly != null) {
-            return fly;
-        }
-        int n = grown.get();
-        while (n < size) {
-            if (grown.compareAndSet(n, n + 1)) {
-                return engine.create(brain.connectome(), brain.params());
+        while (true) {
+            FlySimulation fly = idle.poll();
+            if (fly != null) {
+                return fly;
             }
-            n = grown.get();
-        }
-        try {
-            return idle.take();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("Interrupted while waiting for a free fly", e);
+            int n = grown.get();
+            if (n < size) {
+                if (grown.compareAndSet(n, n + 1)) {
+                    try {
+                        return engine.create(brain.connectome(), brain.params());
+                    } catch (RuntimeException | Error e) {
+                        grown.decrementAndGet();
+                        throw e;
+                    }
+                }
+                continue;
+            }
+            try {
+                fly = idle.poll(GROW_RETRY_MS, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("Interrupted while waiting for a free fly", e);
+            }
+            if (fly != null) {
+                return fly;
+            }
         }
     }
 }

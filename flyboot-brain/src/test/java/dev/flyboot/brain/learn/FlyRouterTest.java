@@ -49,6 +49,18 @@ class FlyRouterTest {
     }
 
     @Test
+    void anUnwritableCacheOnlyCostsTheNextStartItsShortcut(@TempDir Path dir) throws Exception {
+        Path notADirectory = Files.writeString(dir.resolve("cache"), "a file where the cache directory should be");
+        List<String> log = new ArrayList<>();
+        FlyRouter router = FlyRouter.learn(SyntheticBrainAccess.create(1500, 11), ROUTES, SMALL, notADirectory, log::add);
+        assertFalse(router.metrics().fromCache());
+        assertTrue(log.stream().anyMatch(l -> l.startsWith("Cannot cache learned synapses")), String.join("\n", log));
+        try (var files = Files.list(dir)) {
+            assertEquals(1, files.count(), "no temp files left behind");
+        }
+    }
+
+    @Test
     void routingIsDeterministic() throws Exception {
         FlyRouter router = FlyRouter.learn(SyntheticBrainAccess.create(1500, 11), ROUTES, SMALL, null, s -> { });
         FlyRouter.Routing a = router.route("GET", "/pets/42");

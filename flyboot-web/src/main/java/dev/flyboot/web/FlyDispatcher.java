@@ -58,6 +58,9 @@ public final class FlyDispatcher implements HttpHandler {
                         long spikes, double sniffMs, long totalMs) {
     }
 
+    /** What a 500 tells the client; the exception itself goes to the log, not over the wire. */
+    static final String INTERNAL_ERROR = "The fly hit an unexpected error; see the server log";
+
     /** How many recent requests {@link #recentTraces()} keeps. */
     public static final int TRACE_CAPACITY = 50;
 
@@ -102,18 +105,26 @@ public final class FlyDispatcher implements HttpHandler {
         String rawPath = exchange.getRequestURI().getRawPath() == null ? "/" : exchange.getRequestURI().getRawPath();
         try (exchange) {
             requests.incrementAndGet();
-            RouteOracle.Verdict v = oracle.consult(method, rawPath);
-            int status = answer(exchange, method, rawPath, v);
-            v.outcome().accept(status);
-            long ms = (System.nanoTime() - started) / 1_000_000;
-            trace(new Trace(java.time.Instant.now(), method, rawPath,
-                    v.recognized() ? handlers.get(v.route()).template().id() : null, status, v.belief(), v.spikes(),
-                    v.sniffMs(), ms));
-            LOG.log(System.Logger.Level.INFO, () -> String.format(Locale.ROOT,
-                    "%s %s -> %s: %d in %d ms (belief %.2f, %d spikes, sniff %.0f ms)", method, rawPath,
-                    v.recognized() ? handlers.get(v.route()).template().id() + " " + handlers.get(v.route()).describe()
-                            : "unknown smell", status, ms, v.belief(), v.spikes(), v.sniffMs()));
-        } catch (RuntimeException | IOException e) {
+            try {
+                RouteOracle.Verdict v = oracle.consult(method, rawPath);
+                int status = answer(exchange, method, rawPath, v);
+                v.outcome().accept(status);
+                long ms = (System.nanoTime() - started) / 1_000_000;
+                trace(new Trace(java.time.Instant.now(), method, rawPath,
+                        v.recognized() ? handlers.get(v.route()).template().id() : null, status, v.belief(),
+                        v.spikes(), v.sniffMs(), ms));
+                LOG.log(System.Logger.Level.INFO, () -> String.format(Locale.ROOT,
+                        "%s %s -> %s: %d in %d ms (belief %.2f, %d spikes, sniff %.0f ms)", method, rawPath,
+                        v.recognized() ? handlers.get(v.route()).template().id() + " " + handlers.get(v.route()).describe()
+                                : "unknown smell", status, ms, v.belief(), v.spikes(), v.sniffMs()));
+            } catch (RuntimeException e) {
+                LOG.log(System.Logger.Level.ERROR, method + " " + rawPath + " failed", e);
+                // the JDK server would just drop the connection; answer unless the response is already on its way
+                if (exchange.getResponseCode() == -1) {
+                    error(exchange, 500, INTERNAL_ERROR, rawPath, null);
+                }
+            }
+        } catch (IOException e) {
             LOG.log(System.Logger.Level.ERROR, method + " " + rawPath + " failed", e);
             throw e;
         }
@@ -164,9 +175,10 @@ public final class FlyDispatcher implements HttpHandler {
                 return error(exchange, rse.status(), rse.getMessage(), rawPath, v);
             }
             LOG.log(System.Logger.Level.ERROR, h.describe() + " failed on " + rawPath, cause);
-            return error(exchange, 500, cause.getClass().getSimpleName() + ": " + cause.getMessage(), rawPath, v);
+            return error(exchange, 500, INTERNAL_ERROR, rawPath, v);
         } catch (IllegalAccessException e) {
-            return error(exchange, 500, e.getMessage(), rawPath, v);
+            LOG.log(System.Logger.Level.ERROR, "Cannot call " + h.describe() + " on " + rawPath, e);
+            return error(exchange, 500, INTERNAL_ERROR, rawPath, v);
         }
         return write(exchange, h.status(), result);
     }
@@ -319,6 +331,7 @@ public final class FlyDispatcher implements HttpHandler {
         return status;
     }
 
+    /** @param v the fly's verdict, or null when the request failed before the fly gave one */
     private int error(HttpExchange exchange, int status, String message, String path, RouteOracle.Verdict v)
             throws IOException {
         Map<String, Object> body = new LinkedHashMap<>();
@@ -326,11 +339,13 @@ public final class FlyDispatcher implements HttpHandler {
         body.put("error", reason(status));
         body.put("message", message);
         body.put("path", path);
-        Map<String, Object> fly = new LinkedHashMap<>();
-        fly.put("route", v.recognized() ? handlers.get(v.route()).template().id() : null);
-        fly.put("belief", Math.round(v.belief() * 1000) / 1000.0);
-        fly.put("spikes", v.spikes());
-        body.put("fly", fly);
+        if (v != null) {
+            Map<String, Object> fly = new LinkedHashMap<>();
+            fly.put("route", v.recognized() ? handlers.get(v.route()).template().id() : null);
+            fly.put("belief", Math.round(v.belief() * 1000) / 1000.0);
+            fly.put("spikes", v.spikes());
+            body.put("fly", fly);
+        }
         exchange.getResponseHeaders().set("Content-Type", "application/json");
         send(exchange, status, json.writeValueAsBytes(body));
         return status;

@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -56,5 +58,32 @@ class BrainPoolTest {
         BrainPool pool = brain.pool(1, 10, List.of(BrainAtlas.KC));
         Odor alien = new Odor(java.util.Map.of("ORN_UNKNOWN", 50.0));
         assertThrows(IllegalArgumentException.class, () -> pool.sniff(alien, 1));
+    }
+
+    @Test
+    void aFlyThatFailsToGrowGivesItsPlaceBack() throws Exception {
+        AtomicInteger attempts = new AtomicInteger();
+        SimulationEngine flaky = new SimulationEngine() {
+            @Override
+            public String name() {
+                return "flaky";
+            }
+
+            @Override
+            public FlySimulation create(Connectome connectome, LifParams params) {
+                if (attempts.incrementAndGet() == 1) {
+                    throw new IllegalStateException("no memory for a fly");
+                }
+                return SimulationEngine.cpu().create(connectome, params);
+            }
+        };
+        BrainPool pool = brain.pool(1, 10, List.of(BrainAtlas.KC), flaky);
+        Odor odor = nose.smell("GET", "/pets/1");
+        assertThrows(IllegalStateException.class, () -> pool.sniff(odor, 1));
+        try (ExecutorService executor = Executors.newSingleThreadExecutor()) {
+            Future<Perception> next = executor.submit(() -> pool.sniff(odor, 1));
+            assertTrue(next.get(10, TimeUnit.SECONDS).totalSpikes() >= 0, "the single place must be free again");
+        }
+        assertEquals(2, attempts.get());
     }
 }

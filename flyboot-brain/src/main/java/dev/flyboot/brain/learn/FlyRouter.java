@@ -233,8 +233,18 @@ public final class FlyRouter {
                 (System.nanoTime() - started) / 1_000_000, false);
 
         if (cacheFile != null) {
-            Files.createDirectories(cacheDir);
-            Path tmp = Files.createTempFile(cacheDir, "flyroute", ".tmp");
+            writeCache(cacheFile, body, fingerprint, m, log);
+        }
+        return new FlyRouter(endpoints, options, pool, nose, body, m);
+    }
+
+    /** The cache only saves the next start from learning, so failing to write it is not worth failing this one. */
+    private static void writeCache(Path cacheFile, PredictionErrorBody body, String fingerprint, Metrics m,
+                                   Consumer<String> log) {
+        Path tmp = null;
+        try {
+            Files.createDirectories(cacheFile.getParent());
+            tmp = Files.createTempFile(cacheFile.getParent(), "flyroute", ".tmp");
             try (OutputStream out = new BufferedOutputStream(Files.newOutputStream(tmp))) {
                 body.write(out, fingerprint);
                 DataOutputStream data = new DataOutputStream(out);
@@ -243,8 +253,16 @@ public final class FlyRouter {
                 data.flush();
             }
             Files.move(tmp, cacheFile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (IOException e) {
+            log.accept("Cannot cache learned synapses in " + cacheFile + ", the next start will learn again: " + e);
+            if (tmp != null) {
+                try {
+                    Files.deleteIfExists(tmp);
+                } catch (IOException ignored) {
+                    // nothing more to do about a leftover temp file
+                }
+            }
         }
-        return new FlyRouter(endpoints, options, pool, nose, body, m);
     }
 
     /** Sniffs the request and lets the route neurons decide. Same request, same decision. */

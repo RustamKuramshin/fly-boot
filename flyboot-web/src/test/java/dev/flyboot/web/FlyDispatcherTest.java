@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.function.BiFunction;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -112,7 +113,8 @@ class FlyDispatcherTest {
         assertTrue(missing.body().contains("\"route\":\"GET /pets/{id}\""));
         HttpResponse<String> boom = send("GET", "/boom", null);
         assertEquals(500, boom.statusCode());
-        assertTrue(boom.body().contains("IllegalStateException: kaboom"));
+        assertTrue(boom.body().contains(FlyDispatcher.INTERNAL_ERROR), boom.body());
+        assertFalse(boom.body().contains("kaboom"), "the exception stays in the log: " + boom.body());
         assertEquals(400, send("GET", "/pets/abc", null).statusCode(), "matches no template, but see forced below");
     }
 
@@ -163,6 +165,25 @@ class FlyDispatcherTest {
             HttpResponse<String> shortPath = send("GET", "/short", null);
             assertEquals(400, shortPath.statusCode());
             assertTrue(shortPath.body().contains("no segment for {id}"));
+        } finally {
+            forced = null;
+        }
+    }
+
+    @Test
+    void aFailingOracleStillGetsA500() throws Exception {
+        forced = (m, p) -> {
+            if (p.equals("/seizure")) {
+                throw new IllegalStateException("the fly had a seizure");
+            }
+            return null;
+        };
+        try {
+            HttpResponse<String> r = send("GET", "/seizure", null);
+            assertEquals(500, r.statusCode());
+            assertTrue(r.body().contains(FlyDispatcher.INTERNAL_ERROR), r.body());
+            assertFalse(r.body().contains("had a seizure"), r.body());
+            assertEquals(200, send("GET", "/pets/1", null).statusCode(), "the server keeps serving");
         } finally {
             forced = null;
         }
